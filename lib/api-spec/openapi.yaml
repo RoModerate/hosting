@@ -1,0 +1,318 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: hosting
+    description: Bot upload, hosting and access-key operations
+  - name: admin
+    description: Admin configuration (password-protected)
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /keys/redeem:
+    post:
+      operationId: redeemAccessKey
+      tags: [hosting]
+      summary: Redeem an access key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccessKeyInput"
+      responses:
+        "200":
+          description: Key redeemed, session established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostingSession"
+        "400":
+          description: Invalid, expired, or already-used key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /session/me:
+    get:
+      operationId: getSession
+      tags: [hosting]
+      summary: Get the current hosting session
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostingSession"
+        "401":
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bots/upload:
+    post:
+      operationId: uploadBot
+      tags: [hosting]
+      summary: Upload a bot ZIP file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/BotUpload"
+      responses:
+        "200":
+          description: Hosting attempt result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostOutcome"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bots/restart:
+    post:
+      operationId: restartBot
+      tags: [hosting]
+      summary: Restart the hosted bot
+      responses:
+        "200":
+          description: Restart attempt result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostOutcome"
+        "400":
+          description: No bot uploaded yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/status:
+    get:
+      operationId: getAdminStatus
+      tags: [admin]
+      summary: Get bot connection status and which config keys are set
+      parameters:
+        - in: header
+          name: x-admin-password
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Admin status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatus"
+        "401":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/config:
+    post:
+      operationId: updateAdminConfig
+      tags: [admin]
+      summary: Update bot configuration values and reconnect the bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminConfigInput"
+      responses:
+        "200":
+          description: Config updated, bot reconnecting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatus"
+        "401":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    AccessKeyInput:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+      required:
+        - key
+    BotUpload:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+      required:
+        - file
+    HostedBotSummary:
+      type: object
+      properties:
+        fileName:
+          type: string
+        status:
+          type: string
+          enum: [pending, installing, starting, running, crashed, stopped, error]
+        startCommand:
+          type: ["string", "null"]
+        restartCount:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        aiExplanation:
+          type: ["string", "null"]
+        lastStartedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - fileName
+        - status
+        - startCommand
+        - restartCount
+        - errorMessage
+        - aiExplanation
+        - lastStartedAt
+    HostingSession:
+      type: object
+      properties:
+        ticketId:
+          type: integer
+        ownerUsername:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        hostingDurationDays:
+          type: integer
+        hostedBot:
+          oneOf:
+            - $ref: "#/components/schemas/HostedBotSummary"
+            - type: "null"
+      required:
+        - ticketId
+        - ownerUsername
+        - expiresAt
+        - hostingDurationDays
+        - hostedBot
+    HostOutcome:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, crashed, error]
+        message:
+          type: string
+        detail:
+          type: ["string", "null"]
+        startCommand:
+          type: ["string", "null"]
+        aiExplanation:
+          type: ["string", "null"]
+      required:
+        - status
+        - message
+        - detail
+        - startCommand
+        - aiExplanation
+    AdminConfigKey:
+      type: object
+      properties:
+        key:
+          type: string
+        isSet:
+          type: boolean
+      required:
+        - key
+        - isSet
+    AdminStatus:
+      type: object
+      properties:
+        botConnected:
+          type: boolean
+        botTag:
+          type: ["string", "null"]
+        configKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminConfigKey"
+      required:
+        - botConnected
+        - botTag
+        - configKeys
+    AdminConfigInput:
+      type: object
+      properties:
+        adminPassword:
+          type: string
+        discordBotToken:
+          type: ["string", "null"]
+        discordGuildId:
+          type: ["string", "null"]
+        discordStaffRoleId:
+          type: ["string", "null"]
+        discordTicketCategoryName:
+          type: ["string", "null"]
+        openrouterApiKey:
+          type: ["string", "null"]
+        openrouterModel:
+          type: ["string", "null"]
+      required:
+        - adminPassword
