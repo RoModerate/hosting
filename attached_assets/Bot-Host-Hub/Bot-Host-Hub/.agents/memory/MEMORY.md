@@ -1,2 +1,0 @@
-- [Orval binary uploads need DOM lib](orval-binary-upload-dom-lib.md) — `format: binary` fields generate `Blob`/`File` types; a Node-only lib's tsconfig needs `"dom"` added or codegen fails to typecheck.
-- [Portal session cookies](hosting-portal-session-cookies.md) — signed cookie + DB-row revalidation pattern used for the hosting-portal website session.

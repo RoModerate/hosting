@@ -8,9 +8,16 @@ import { db, hostedBotsTable, ticketsTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { ticketBotDir, ticketUploadDir } from "./paths";
 import {
+  appendLiveLog,
+  armStabilityReset,
   clearRunningProcess,
+  consumeIntentionalStop,
+  getAutoRestartAttempts,
+  getLiveLog,
+  resetAutoRestartAttempts,
   setRunningProcess,
   stopProcess,
+  tryConsumeAutoRestartAttempt,
 } from "./processManager";
 import { explainHostingFailure } from "./aiExplain";
 
@@ -18,8 +25,10 @@ export const MAX_ZIP_BYTES = 100 * 1024 * 1024; // 100MB
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — large monorepos can be slow
 const STARTUP_PROBE_MS = 8 * 1000;
 const OUTPUT_TAIL_CHARS = 3500;
+const AUTO_RESTART_BASE_DELAY_MS = 3000;
 
 export type HostStatus = "running" | "crashed" | "error";
+export type BotLanguage = "node" | "python";
 
 export interface HostResult {
   status: HostStatus;
@@ -32,6 +41,22 @@ export interface HostResult {
 function tail(text: string, max: number): string {
   return text.length > max ? text.slice(text.length - max) : text;
 }
+
+/** Host-only secrets that a hosted bot must never see, even by accident. */
+const HOST_SECRET_KEYS = [
+  "DISCORD_BOT_TOKEN",
+  "DISCORD_GUILD_ID",
+  "DISCORD_STAFF_ROLE_ID",
+  "SESSION_SECRET",
+  "ADMIN_PASSWORD",
+  "OPENROUTER_API_KEY",
+  "DATABASE_URL",
+  "PGHOST",
+  "PGPORT",
+  "PGUSER",
+  "PGPASSWORD",
+  "PGDATABASE",
+];
 
 function runCommand(
   cmd: string,
@@ -92,17 +117,62 @@ function botPort(ticketId: number): number {
   return 10000 + (ticketId % 10000);
 }
 
-/** Bot-specific env: inherits everything from host but overrides dangerous vars. */
-function botEnv(ticketId: number): NodeJS.ProcessEnv {
+/**
+ * Parse the user-supplied env vars JSON stored on the hosted_bots row.
+ * Never throws — malformed JSON just means "no custom vars".
+ */
+function parseEnvVars(raw: string | null | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof k === "string" && k.trim()) out[k.trim()] = String(v);
+      }
+      return out;
+    }
+  } catch {
+    // fall through
+  }
+  return {};
+}
+
+export async function getHostedBotEnvVars(ticketId: number): Promise<Record<string, string>> {
+  const [row] = await db
+    .select()
+    .from(hostedBotsTable)
+    .where(eq(hostedBotsTable.ticketId, ticketId));
+  return parseEnvVars(row?.envVars);
+}
+
+export async function setHostedBotEnvVars(
+  ticketId: number,
+  vars: Record<string, string>,
+): Promise<void> {
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    const key = k.trim();
+    if (!key) continue;
+    clean[key] = String(v);
+  }
+  await updateHostedBot(ticketId, { envVars: JSON.stringify(clean) });
+}
+
+/**
+ * Bot-specific env: strips our own server secrets so a hosted bot can never
+ * read the host's Discord token / DB creds / admin password, assigns the
+ * bot an isolated port, then layers the customer's own env vars on top so
+ * their bot's own DISCORD_BOT_TOKEN (or any other var) wins.
+ */
+function botEnv(ticketId: number, userVars: Record<string, string>): NodeJS.ProcessEnv {
+  const base: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of HOST_SECRET_KEYS) delete base[key];
+
   return {
-    ...process.env,
+    ...base,
     PORT: String(botPort(ticketId)),
-    // Prevent bots from accidentally stealing our DB / Discord creds
-    // by clearing variables that only make sense for our own server.
-    // (Users supply their own via .env inside the ZIP.)
-    DISCORD_BOT_TOKEN: "",
-    SESSION_SECRET: "",
-    ADMIN_PASSWORD: "",
+    ...userVars,
   };
 }
 
@@ -145,6 +215,7 @@ function runStartupProbe(
   args: string[],
   cwd: string,
   ticketId: number,
+  userVars: Record<string, string>,
 ): Promise<StartupProbeResult> {
   return new Promise((resolve) => {
     let output = "";
@@ -152,14 +223,18 @@ function runStartupProbe(
     const child = spawn(cmd, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: botEnv(ticketId),
+      env: botEnv(ticketId, userVars),
     });
 
     child.stdout?.on("data", (d: Buffer) => {
-      output = tail(output + d.toString(), OUTPUT_TAIL_CHARS);
+      const text = d.toString();
+      output = tail(output + text, OUTPUT_TAIL_CHARS);
+      appendLiveLog(ticketId, text);
     });
     child.stderr?.on("data", (d: Buffer) => {
-      output = tail(output + d.toString(), OUTPUT_TAIL_CHARS);
+      const text = d.toString();
+      output = tail(output + text, OUTPUT_TAIL_CHARS);
+      appendLiveLog(ticketId, text);
     });
 
     const timer = setTimeout(() => {
@@ -209,28 +284,63 @@ function scorePackageDir(dir: string, pkg: Record<string, unknown>, depth: numbe
   return score;
 }
 
-interface ProjectCandidate { dir: string; pkg: Record<string, unknown>; score: number }
+// Score a directory as a candidate Python project root.
+function scorePythonDir(dir: string, depth: number): number {
+  let score = 10 - depth;
+  if (fs.existsSync(path.join(dir, "requirements.txt"))) score += 8;
+  for (const f of ["bot.py", "main.py", "app.py", "run.py"]) {
+    if (fs.existsSync(path.join(dir, f))) { score += 6; break; }
+  }
+  return score;
+}
 
-async function findProjectRoot(rootDir: string): Promise<{ dir: string; pkg: Record<string, unknown> } | null> {
+interface NodeCandidate { kind: "node"; dir: string; pkg: Record<string, unknown>; score: number }
+interface PythonCandidate { kind: "python"; dir: string; score: number }
+type ProjectCandidate = NodeCandidate | PythonCandidate;
+
+export interface ProjectRoot {
+  dir: string;
+  language: BotLanguage;
+  pkg: Record<string, unknown> | null;
+}
+
+/**
+ * Walks the extracted ZIP looking for the most likely bot project root.
+ * Recognises both Node.js projects (package.json) and Python projects
+ * (requirements.txt and/or a conventional entry file like bot.py/main.py).
+ */
+async function findProjectRoot(rootDir: string): Promise<ProjectRoot | null> {
   const candidates: ProjectCandidate[] = [];
 
   async function search(dir: string, depth: number): Promise<void> {
-    if (depth > 5 || candidates.length > 30) return; // safety limits
+    if (depth > 5 || candidates.length > 40) return; // safety limits
 
     const pkgPath = path.join(dir, "package.json");
+    let stoppedBranch = false;
     if (fs.existsSync(pkgPath)) {
       try {
         const raw = await fsp.readFile(pkgPath, "utf-8");
         const pkg = JSON.parse(raw) as Record<string, unknown>;
         const score = scorePackageDir(dir, pkg, depth);
-        candidates.push({ dir, pkg, score });
+        candidates.push({ kind: "node", dir, pkg, score });
         // If this is clearly a monorepo root, keep searching inside it.
         // Otherwise stop — the first package.json found in a branch wins.
-        if (!pkg["workspaces"] && score >= 8) return;
+        if (!pkg["workspaces"] && score >= 8) stoppedBranch = true;
       } catch {
         // malformed package.json — ignore
       }
     }
+
+    const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
+    const hasPyEntry = ["bot.py", "main.py", "app.py", "run.py"].some((f) =>
+      fs.existsSync(path.join(dir, f)),
+    );
+    if (!stoppedBranch && (hasRequirements || hasPyEntry)) {
+      candidates.push({ kind: "python", dir, score: scorePythonDir(dir, depth) });
+      stoppedBranch = true;
+    }
+
+    if (stoppedBranch) return;
 
     let entries: fs.Dirent[];
     try {
@@ -249,8 +359,11 @@ async function findProjectRoot(rootDir: string): Promise<{ dir: string; pkg: Rec
 
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => b.score - a.score);
-  const best = candidates[0];
-  return { dir: best.dir, pkg: best.pkg };
+  const best = candidates[0]!;
+  if (best.kind === "node") {
+    return { dir: best.dir, language: "node", pkg: best.pkg };
+  }
+  return { dir: best.dir, language: "python", pkg: null };
 }
 
 type PackageManager = "npm" | "pnpm" | "yarn";
@@ -298,7 +411,10 @@ const ENTRY_FILES = [
   "app.js", "server.js", "src/index.js", "src/bot.js",
 ];
 
-function resolveStartCommand(
+// Python entry files, tried in order of preference.
+const PYTHON_ENTRY_FILES = ["bot.py", "main.py", "app.py", "run.py"];
+
+function resolveNodeStartCommand(
   projectRoot: string,
   pkg: Record<string, unknown>,
   pm: PackageManager,
@@ -332,6 +448,20 @@ function resolveStartCommand(
   return { error: `No way to start the bot was found. ${hint}` };
 }
 
+function resolvePythonStartCommand(projectRoot: string): StartCommand | { error: string } {
+  for (const candidate of PYTHON_ENTRY_FILES) {
+    if (fs.existsSync(path.join(projectRoot, candidate))) {
+      return { cmd: PYTHON_BIN, args: [candidate], label: `${PYTHON_BIN} ${candidate}` };
+    }
+  }
+  return {
+    error: `No way to start the Python bot was found. Add one of: ${PYTHON_ENTRY_FILES.join(", ")}.`,
+  };
+}
+
+const PYTHON_BIN = "python3";
+const PIP_INSTALL_ARGS = ["-m", "pip", "install", "--no-input", "--disable-pip-version-check", "-r", "requirements.txt"];
+
 export async function updateHostedBot(
   ticketId: number,
   values: Partial<{
@@ -343,6 +473,9 @@ export async function updateHostedBot(
     aiExplanation: string | null;
     lastStartedAt: Date;
     restartCount: number;
+    envVars: string;
+    language: string;
+    recentLog: string;
   }>,
 ): Promise<number> {
   const existing = await db
@@ -363,6 +496,9 @@ export async function updateHostedBot(
         aiExplanation: values.aiExplanation ?? null,
         lastStartedAt: values.lastStartedAt,
         restartCount: values.restartCount ?? 0,
+        envVars: values.envVars ?? "{}",
+        language: values.language ?? "node",
+        recentLog: values.recentLog ?? "",
       })
       .returning();
     return row!.id;
@@ -400,21 +536,58 @@ async function reportFailure(
   return { status, ...result, aiExplanation: aiExplanation ?? undefined };
 }
 
+function scheduleAutoRestart(
+  ticketId: number,
+  onCrash?: (info: { exitCode: number | null }) => void,
+): void {
+  const attemptAllowed = tryConsumeAutoRestartAttempt(ticketId);
+  if (!attemptAllowed) {
+    logger.warn({ ticketId }, "Hosted bot exceeded auto-restart budget; giving up");
+    return;
+  }
+  const attemptNumber = getAutoRestartAttempts(ticketId);
+  const delay = AUTO_RESTART_BASE_DELAY_MS * attemptNumber;
+  logger.info({ ticketId, delay, attemptNumber }, "Scheduling auto-restart for crashed hosted bot");
+  setTimeout(() => {
+    restartHostedBot(ticketId, onCrash, { isAutoRestart: true }).catch((err) => {
+      logger.error({ err, ticketId }, "Auto-restart attempt failed");
+    });
+  }, delay);
+}
+
 function attachSupervision(
   ticketId: number,
   child: ChildProcess,
   onCrash?: (info: { exitCode: number | null }) => void,
 ): void {
   setRunningProcess(ticketId, child);
+  armStabilityReset(ticketId);
+
+  child.stdout?.on("data", (d: Buffer) => appendLiveLog(ticketId, d.toString()));
+  child.stderr?.on("data", (d: Buffer) => appendLiveLog(ticketId, d.toString()));
+
   child.once("exit", (code) => {
     clearRunningProcess(ticketId);
+    const wasIntentional = consumeIntentionalStop(ticketId);
+
+    const tailLog = tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS);
     db.update(hostedBotsTable)
-      .set({ status: "crashed", errorMessage: `Process exited with code ${code}.` })
+      .set({
+        status: wasIntentional ? "stopped" : "crashed",
+        errorMessage: wasIntentional
+          ? null
+          : `Process exited with code ${code ?? "unknown"}.${tailLog ? `\n\n${tailLog}` : ""}`,
+        recentLog: tailLog,
+      })
       .where(eq(hostedBotsTable.ticketId, ticketId))
-      .catch((err) => {
+      .catch((err: unknown) => {
         logger.error({ err }, "Failed to update hosted bot status after crash");
       });
+
+    if (wasIntentional) return;
+
     onCrash?.({ exitCode: code });
+    scheduleAutoRestart(ticketId, onCrash);
   });
 }
 
@@ -427,6 +600,7 @@ export async function hostUploadedZip(params: {
   const { ticketId, zipPath, fileName, onCrash } = params;
 
   stopProcess(ticketId);
+  resetAutoRestartAttempts(ticketId);
 
   const extractRoot = ticketBotDir(ticketId);
   await fsp.rm(extractRoot, { recursive: true, force: true });
@@ -456,30 +630,51 @@ export async function hostUploadedZip(params: {
 
   const found = await findProjectRoot(extractRoot);
   if (!found) {
-    const message = "No package.json was found in the ZIP. Make sure your bot's package.json is included in the ZIP file.";
+    const message =
+      "No supported project was found in the ZIP. Include a package.json (Node.js) or a requirements.txt / bot.py (Python) in the archive.";
     return reportFailure(ticketId, fileName, "error", { message });
   }
 
-  const { dir: projectRoot, pkg } = found;
-  const pm = detectPackageManager(projectRoot, pkg);
-  logger.info({ ticketId, projectRoot, pm }, "Bot project root detected");
+  const { dir: projectRoot, language, pkg } = found;
+  logger.info({ ticketId, projectRoot, language }, "Bot project root detected");
 
-  const startCommand = resolveStartCommand(projectRoot, pkg, pm);
+  let startCommand: StartCommand | { error: string };
+  let pm: PackageManager | null = null;
+
+  if (language === "node") {
+    pm = detectPackageManager(projectRoot, pkg!);
+    startCommand = resolveNodeStartCommand(projectRoot, pkg!, pm);
+  } else {
+    startCommand = resolvePythonStartCommand(projectRoot);
+  }
+
   if ("error" in startCommand) {
     return reportFailure(ticketId, fileName, "error", { message: startCommand.error });
   }
 
-  // Build the install args appropriate for each package manager.
-  const installArgs =
-    pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
-    pm === "yarn" ? ["install", "--non-interactive"] :
-    ["install", "--no-audit", "--no-fund"];
+  await updateHostedBot(ticketId, { language });
 
-  const install = await runCommand(pm, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
+  // Build + run the install step appropriate for each language/package manager.
+  let install: { exitedCleanly: boolean; exitCode: number | null; output: string };
+  if (language === "node") {
+    const installArgs =
+      pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
+      pm === "yarn" ? ["install", "--non-interactive"] :
+      ["install", "--no-audit", "--no-fund"];
+    install = await runCommand(pm!, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
+  } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
+    install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
+  } else {
+    // No requirements.txt — nothing to install, treat as a clean no-op.
+    install = { exitedCleanly: true, exitCode: 0, output: "" };
+  }
 
   if (!install.exitedCleanly) {
     return reportFailure(ticketId, fileName, "error", {
-      message: "Dependency installation failed.",
+      message:
+        language === "node"
+          ? "Dependency installation failed."
+          : "Failed to install Python dependencies from requirements.txt.",
       detail: install.output,
       startCommand: startCommand.label,
     });
@@ -492,7 +687,8 @@ export async function hostUploadedZip(params: {
     extractPath: projectRoot,
   });
 
-  const probe = await runStartupProbe(startCommand.cmd, startCommand.args, projectRoot, ticketId);
+  const userVars = await getHostedBotEnvVars(ticketId);
+  const probe = await runStartupProbe(startCommand.cmd, startCommand.args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
     return reportFailure(ticketId, fileName, "crashed", {
@@ -508,6 +704,7 @@ export async function hostUploadedZip(params: {
     errorMessage: null,
     aiExplanation: null,
     lastStartedAt: new Date(),
+    recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
   return {
@@ -520,6 +717,7 @@ export async function hostUploadedZip(params: {
 export async function restartHostedBot(
   ticketId: number,
   onCrash?: (info: { exitCode: number | null }) => void,
+  opts?: { isAutoRestart?: boolean },
 ): Promise<HostResult> {
   const [row] = await db
     .select()
@@ -531,6 +729,7 @@ export async function restartHostedBot(
   }
 
   stopProcess(ticketId);
+  if (!opts?.isAutoRestart) resetAutoRestartAttempts(ticketId);
 
   const projectRoot = row.extractPath;
   if (!fs.existsSync(projectRoot)) {
@@ -539,7 +738,8 @@ export async function restartHostedBot(
   }
 
   const [cmd, ...args] = row.startCommand.split(" ");
-  const probe = await runStartupProbe(cmd!, args, projectRoot, ticketId);
+  const userVars = await getHostedBotEnvVars(ticketId);
+  const probe = await runStartupProbe(cmd!, args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
     await updateHostedBot(ticketId, { restartCount: row.restartCount + 1 });
@@ -556,6 +756,7 @@ export async function restartHostedBot(
     aiExplanation: null,
     lastStartedAt: new Date(),
     restartCount: row.restartCount + 1,
+    recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
   return { status: "running", message: "The bot was restarted and is now running." };

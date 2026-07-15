@@ -13,10 +13,12 @@ import {
 } from "@workspace/db";
 import { RedeemAccessKeyBody } from "@workspace/api-zod";
 import {
+  getHostedBotEnvVars,
   getHostedBotStatus,
   hostUploadedZip,
   MAX_ZIP_BYTES,
   restartHostedBot,
+  setHostedBotEnvVars,
   ticketUploadDir,
   updateHostedBot,
   type HostResult,
@@ -231,6 +233,57 @@ router.post(
     }
   },
 );
+
+router.get("/bots/env", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    return;
+  }
+
+  const vars = await getHostedBotEnvVars(session.ticket.id);
+  res.json({ vars });
+});
+
+router.post("/bots/env", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    return;
+  }
+
+  const body = req.body as { vars?: unknown };
+  if (!body || typeof body.vars !== "object" || body.vars === null || Array.isArray(body.vars)) {
+    res.status(400).json({ error: "Expected a JSON object of environment variables." });
+    return;
+  }
+
+  const rawVars = body.vars as Record<string, unknown>;
+  const vars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(rawVars)) {
+    const trimmedKey = key.trim();
+    if (!trimmedKey) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmedKey)) {
+      res.status(400).json({ error: `"${trimmedKey}" is not a valid environment variable name.` });
+      return;
+    }
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+      res.status(400).json({ error: `The value for "${trimmedKey}" must be text.` });
+      return;
+    }
+    vars[trimmedKey] = String(value);
+  }
+
+  try {
+    await setHostedBotEnvVars(session.ticket.id, vars);
+    res.json({ ok: true, vars });
+  } catch (err) {
+    logger.error({ err, ticketId: session.ticket.id }, "Failed to save hosted bot env vars");
+    res.status(500).json({ error: "Failed to save secrets. Please try again." });
+  }
+});
 
 router.post("/bots/restart", async (req, res) => {
   const session = await resolveSession(req);

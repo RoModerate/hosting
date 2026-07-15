@@ -25,6 +25,12 @@ export const hostedBotsTable = pgTable("hosted_bots", {
   // (e.g. DISCORD_TOKEN, MONGODB_URI).  Stored as text to avoid a JSON column
   // migration headache on SQLite/PG compatibility shims.
   envVars: text("env_vars").notNull().default("{}"),
+  // Detected runtime for the uploaded project: "node" | "python".
+  language: text("language").notNull().default("node"),
+  // Rolling tail of the bot's live stdout/stderr while running, so crashes
+  // and the dashboard's log viewer have something real to show even when
+  // the process dies well after the initial startup probe.
+  recentLog: text("recent_log").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
