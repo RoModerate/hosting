@@ -265,90 +265,311 @@ const SKIP_DIRS = new Set([
   ".git", "node_modules", ".agents", ".local", ".cache", ".replit",
   "dist", "build", "__pycache__", ".venv", "venv", ".next", ".nuxt",
   "coverage", ".turbo", ".svelte-kit", "out", ".output",
+  // Platform-internal directories: previous bot uploads and raw file assets
+  // must never be scanned for project roots.
+  "storage", "attached_assets",
 ]);
+
+// Known Discord bot library names for Node.js.
+const DISCORD_NODE_LIBS = new Set([
+  "discord.js", "discordjs", "eris", "oceanic.js", "discord-api-types",
+  "@discordjs/rest", "@discordjs/core", "@discordjs/ws",
+  "discord.js-commando", "discord-akairo",
+]);
+
+// Known Discord bot library names for Python.
+const DISCORD_PYTHON_LIBS = new Set([
+  "discord.py", "discord", "nextcord", "disnake", "py-cord",
+  "hikari", "tanjun", "lightbulb",
+]);
+
+/** Returns true when any dependency key is a known Discord library. */
+function hasBotDependency(
+  pkg: Record<string, unknown>,
+  libs: Set<string>,
+): boolean {
+  const deps = {
+    ...(pkg["dependencies"] as Record<string, string> | undefined ?? {}),
+    ...(pkg["devDependencies"] as Record<string, string> | undefined ?? {}),
+    ...(pkg["peerDependencies"] as Record<string, string> | undefined ?? {}),
+  };
+  return Object.keys(deps).some((k) => libs.has(k));
+}
+
+/**
+ * Parse workspace package glob patterns from a pnpm-workspace.yaml or from
+ * the "workspaces" field of a root package.json.
+ *
+ * Returns an array like ["artifacts/*", "lib/*"].
+ * Returns [] when nothing recognisable is found.
+ */
+function parseWorkspaceGlobs(rootDir: string): string[] {
+  const globs: string[] = [];
+
+  // 1. pnpm-workspace.yaml (pnpm format)
+  const yamlPath = path.join(rootDir, "pnpm-workspace.yaml");
+  if (fs.existsSync(yamlPath)) {
+    try {
+      const lines = fs.readFileSync(yamlPath, "utf-8").split("\n");
+      let inPackages = false;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === "packages:") { inPackages = true; continue; }
+        if (inPackages && trimmed.startsWith("-")) {
+          const g = trimmed.replace(/^-\s*/, "").replace(/['"]/g, "").trim();
+          if (g) globs.push(g);
+        } else if (inPackages && trimmed && !trimmed.startsWith("#") && !trimmed.startsWith("-")) {
+          break; // end of packages block
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. package.json "workspaces" field (npm / yarn format)
+  const pkgPath = path.join(rootDir, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+      const ws = pkg["workspaces"];
+      if (Array.isArray(ws)) {
+        for (const g of ws) {
+          if (typeof g === "string") globs.push(g);
+        }
+      } else if (ws && typeof ws === "object") {
+        const pkgs = (ws as Record<string, unknown>)["packages"];
+        if (Array.isArray(pkgs)) {
+          for (const g of pkgs) {
+            if (typeof g === "string") globs.push(g);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  return globs;
+}
+
+/**
+ * Returns true when `candidateDir` is a workspace member of the workspace
+ * rooted at `workspaceRoot` according to the given glob patterns.
+ *
+ * Handles:
+ *   "packages/*"   — immediate children of packages/
+ *   "packages/**"  — any descendant of packages/
+ *   "apps/my-app"  — exact path match
+ *
+ * When `globs` is empty, falls back to a conservative "anything that is a
+ * descendant of the workspace root is a member" rule.
+ */
+function isWorkspaceMember(
+  candidateDir: string,
+  workspaceRoot: string,
+  globs: string[],
+): boolean {
+  const rel = path.relative(workspaceRoot, candidateDir).replace(/\\/g, "/");
+  if (!rel || rel.startsWith("..")) return false; // outside the workspace tree
+
+  if (globs.length === 0) {
+    // No glob info — conservatively treat all descendants as members.
+    return true;
+  }
+
+  for (const raw of globs) {
+    const pattern = raw.replace(/['"]/g, "").trim();
+    const parts = pattern.split("/");
+
+    if (parts.length === 2 && parts[1] === "*") {
+      // "dir/*" → matches any immediate child of dir/
+      const prefix = parts[0] + "/";
+      if (rel.startsWith(prefix) && !rel.slice(prefix.length).includes("/")) {
+        return true;
+      }
+    } else if (parts[parts.length - 1] === "**") {
+      // "dir/**" → matches any descendant of dir/
+      const prefix = parts.slice(0, -1).join("/");
+      if (!prefix || rel === prefix || rel.startsWith(prefix + "/")) return true;
+    } else if (parts[parts.length - 1] === "*") {
+      // Treat trailing "*" the same as "/*"
+      const prefix = parts.slice(0, -1).join("/");
+      const afterPrefix = prefix ? rel.slice(prefix.length + 1) : rel;
+      if (rel.startsWith(prefix) && afterPrefix && !afterPrefix.includes("/")) {
+        return true;
+      }
+    } else {
+      // Exact path match or prefix match (e.g., "apps/my-app")
+      if (rel === pattern || rel.startsWith(pattern + "/")) return true;
+    }
+  }
+
+  return false;
+}
+
+/** Parse requirements.txt lines to extract package names. */
+function parsePythonRequirements(requirementsPath: string): Set<string> {
+  try {
+    const lines = fs.readFileSync(requirementsPath, "utf-8").split("\n");
+    const names = new Set<string>();
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      // Strip version specifiers: discord.py>=2.0 → discord.py
+      const name = line.split(/[>=<!@;\s]/)[0]!.toLowerCase();
+      if (name) names.add(name);
+    }
+    return names;
+  } catch {
+    return new Set();
+  }
+}
+
+/** Returns true when requirements.txt mentions a known Discord library. */
+function pyRequirementsHasDiscord(requirementsPath: string): boolean {
+  const pkgs = parsePythonRequirements(requirementsPath);
+  return [...pkgs].some((p) => DISCORD_PYTHON_LIBS.has(p));
+}
 
 // Score a directory that contains package.json.
 // Higher score = more likely to be the actual bot root.
 function scorePackageDir(dir: string, pkg: Record<string, unknown>, depth: number): number {
-  let score = 10 - depth; // prefer shallower
+  let score = 10 - depth * 2; // prefer shallower; depth penalty doubled
+
   const scripts = (pkg["scripts"] ?? {}) as Record<string, string>;
   if (typeof scripts["start"] === "string") score += 8;
-  if (typeof scripts["dev"] === "string") score += 5;
-  // Penalise obvious monorepo / tooling roots
-  if (pkg["workspaces"]) score -= 6;
-  if (typeof scripts["preinstall"] === "string" && scripts["preinstall"].includes("pnpm")) score -= 6;
+  if (typeof scripts["dev"] === "string") score += 4;
+
+  // Strongly reward Discord bot packages
+  if (hasBotDependency(pkg, DISCORD_NODE_LIBS)) score += 20;
+
+  // Heavily penalise workspace / monorepo roots
+  if (pkg["workspaces"]) score -= 20;
+  if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) score -= 15;
+  if (typeof scripts["preinstall"] === "string" && scripts["preinstall"].includes("pnpm")) score -= 8;
+
   // Reward having recognisable entry files
   for (const f of ["index.js", "index.mjs", "bot.js", "main.js", "index.ts", "bot.ts"]) {
-    if (fs.existsSync(path.join(dir, f))) { score += 3; break; }
+    if (fs.existsSync(path.join(dir, f))) { score += 4; break; }
   }
+
   return score;
 }
 
 // Score a directory as a candidate Python project root.
 function scorePythonDir(dir: string, depth: number): number {
-  let score = 10 - depth;
-  if (fs.existsSync(path.join(dir, "requirements.txt"))) score += 8;
+  let score = 10 - depth * 2;
+  const reqPath = path.join(dir, "requirements.txt");
+  if (fs.existsSync(reqPath)) {
+    score += 8;
+    if (pyRequirementsHasDiscord(reqPath)) score += 20;
+  }
   for (const f of ["bot.py", "main.py", "app.py", "run.py"]) {
     if (fs.existsSync(path.join(dir, f))) { score += 6; break; }
   }
   return score;
 }
 
-interface NodeCandidate { kind: "node"; dir: string; pkg: Record<string, unknown>; score: number }
-interface PythonCandidate { kind: "python"; dir: string; score: number }
+interface NodeCandidate {
+  kind: "node";
+  dir: string;
+  pkg: Record<string, unknown>;
+  score: number;
+  hasDiscord: boolean;
+}
+interface PythonCandidate {
+  kind: "python";
+  dir: string;
+  score: number;
+  hasDiscord: boolean;
+}
 type ProjectCandidate = NodeCandidate | PythonCandidate;
 
 export interface ProjectRoot {
   dir: string;
   language: BotLanguage;
   pkg: Record<string, unknown> | null;
+  hasDiscord: boolean;
 }
 
+/** Result of the root-detection pass. */
+export type FindRootResult =
+  | { kind: "found"; root: ProjectRoot }
+  | { kind: "not_found" }
+  | { kind: "workspace_only" }
+  | { kind: "ambiguous"; candidates: { label: string; dir: string }[] };
+
 /**
- * Walks the extracted ZIP looking for the most likely bot project root.
- * Recognises both Node.js projects (package.json) and Python projects
- * (requirements.txt and/or a conventional entry file like bot.py/main.py).
+ * Walks the extracted ZIP looking for the most likely Discord bot project root.
+ *
+ * Key behaviour:
+ *  - workspace/monorepo roots (pnpm-workspace.yaml or package.json "workspaces")
+ *    are tracked but never added as bot candidates.
+ *  - After the walk, workspace glob patterns are parsed and each candidate is
+ *    classified as a "workspace member" or "standalone". Only standalone
+ *    candidates are considered for selection.
+ *  - Among standalone candidates, discord-library packages are strongly
+ *    preferred. Non-discord packages are only picked if nothing else is found.
+ *
+ * Returns:
+ *  - found        — one clear winner identified
+ *  - ambiguous    — 2+ equally-plausible candidates; user must re-upload
+ *  - workspace_only — only workspace/monorepo structure found, no usable bot
+ *  - not_found    — no recognised project structure at all
  */
-async function findProjectRoot(rootDir: string): Promise<ProjectRoot | null> {
+async function findProjectRoot(rootDir: string): Promise<FindRootResult> {
   const candidates: ProjectCandidate[] = [];
+  // Dirs confirmed to be workspace roots during the walk.
+  const workspaceRootDirs: string[] = [];
 
   async function search(dir: string, depth: number): Promise<void> {
-    if (depth > 5 || candidates.length > 40) return; // safety limits
+    if (depth > 6 || candidates.length > 50) return;
 
+    const hasWorkspaceYaml = fs.existsSync(path.join(dir, "pnpm-workspace.yaml"));
     const pkgPath = path.join(dir, "package.json");
     let stoppedBranch = false;
+
     if (fs.existsSync(pkgPath)) {
       try {
         const raw = await fsp.readFile(pkgPath, "utf-8");
         const pkg = JSON.parse(raw) as Record<string, unknown>;
-        const score = scorePackageDir(dir, pkg, depth);
-        candidates.push({ kind: "node", dir, pkg, score });
-        // If this is clearly a monorepo root, keep searching inside it.
-        // Otherwise stop — the first package.json found in a branch wins.
-        if (!pkg["workspaces"] && score >= 8) stoppedBranch = true;
+        const isWorkspaceRoot = !!pkg["workspaces"] || hasWorkspaceYaml;
+
+        if (isWorkspaceRoot) {
+          // Track the workspace root but DO NOT add it as a candidate.
+          // Keep searching inside it for member packages.
+          workspaceRootDirs.push(dir);
+        } else {
+          const score = scorePackageDir(dir, pkg, depth);
+          const hasDiscord = hasBotDependency(pkg, DISCORD_NODE_LIBS);
+          candidates.push({ kind: "node", dir, pkg, score, hasDiscord });
+          // Strong non-workspace candidate: stop descending this branch.
+          if (score >= 8) stoppedBranch = true;
+        }
       } catch {
         // malformed package.json — ignore
       }
+    } else if (hasWorkspaceYaml) {
+      // pnpm-workspace.yaml without a package.json (rare but valid)
+      workspaceRootDirs.push(dir);
     }
 
-    const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
-    const hasPyEntry = ["bot.py", "main.py", "app.py", "run.py"].some((f) =>
-      fs.existsSync(path.join(dir, f)),
-    );
-    if (!stoppedBranch && (hasRequirements || hasPyEntry)) {
-      candidates.push({ kind: "python", dir, score: scorePythonDir(dir, depth) });
-      stoppedBranch = true;
+    if (!stoppedBranch) {
+      const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
+      const hasPyEntry = ["bot.py", "main.py", "app.py", "run.py"].some((f) =>
+        fs.existsSync(path.join(dir, f)),
+      );
+      if (hasRequirements || hasPyEntry) {
+        const score = scorePythonDir(dir, depth);
+        const reqPath = path.join(dir, "requirements.txt");
+        const hasDiscord = hasRequirements && pyRequirementsHasDiscord(reqPath);
+        candidates.push({ kind: "python", dir, score, hasDiscord });
+        stoppedBranch = true;
+      }
     }
 
     if (stoppedBranch) return;
 
     let entries: fs.Dirent[];
-    try {
-      entries = await fsp.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); }
+    catch { return; }
     for (const entry of entries) {
       if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
       await search(path.join(dir, entry.name), depth + 1);
@@ -357,13 +578,66 @@ async function findProjectRoot(rootDir: string): Promise<ProjectRoot | null> {
 
   await search(rootDir, 0);
 
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.score - a.score);
-  const best = candidates[0]!;
-  if (best.kind === "node") {
-    return { dir: best.dir, language: "node", pkg: best.pkg };
+  if (candidates.length === 0 && workspaceRootDirs.length === 0) {
+    return { kind: "not_found" };
   }
-  return { dir: best.dir, language: "python", pkg: null };
+
+  // ── Workspace-member classification ──────────────────────────────────────
+  // For every workspace root found during the walk, parse its package globs
+  // and determine which candidates are declared workspace members.
+  const workspaceDefs = workspaceRootDirs.map((root) => ({
+    root,
+    globs: parseWorkspaceGlobs(root),
+  }));
+
+  const standalone: ProjectCandidate[] = [];
+  const workspaceMembers: ProjectCandidate[] = [];
+
+  for (const c of candidates) {
+    const isMember = workspaceDefs.some(({ root, globs }) =>
+      isWorkspaceMember(c.dir, root, globs),
+    );
+    (isMember ? workspaceMembers : standalone).push(c);
+  }
+
+  if (standalone.length === 0) {
+    // Every candidate is a workspace member (or the ZIP only had workspace roots).
+    return { kind: "workspace_only" };
+  }
+
+  // ── Winner selection ──────────────────────────────────────────────────────
+  standalone.sort((a, b) => b.score - a.score);
+
+  // Prefer discord-library packages; fall back to the full pool.
+  const discordPool = standalone.filter((c) => c.hasDiscord);
+  const pool = discordPool.length > 0 ? discordPool : standalone;
+
+  // Ambiguity: top two candidates within 4 score points → can't auto-pick.
+  if (pool.length >= 2) {
+    const [first, second] = pool as [ProjectCandidate, ProjectCandidate];
+    if (Math.abs(first.score - second.score) <= 4) {
+      const ambiguousList = pool.slice(0, 5).map((c) => {
+        const rel = path.relative(rootDir, c.dir) || ".";
+        const label = c.kind === "node"
+          ? `${rel} (Node.js${c.hasDiscord ? ", discord.js" : ""})`
+          : `${rel} (Python${c.hasDiscord ? ", discord.py" : ""})`;
+        return { label, dir: c.dir };
+      });
+      return { kind: "ambiguous", candidates: ambiguousList };
+    }
+  }
+
+  const winner = pool[0]!;
+  if (winner.kind === "node") {
+    return {
+      kind: "found",
+      root: { dir: winner.dir, language: "node", pkg: winner.pkg, hasDiscord: winner.hasDiscord },
+    };
+  }
+  return {
+    kind: "found",
+    root: { dir: winner.dir, language: "python", pkg: null, hasDiscord: winner.hasDiscord },
+  };
 }
 
 type PackageManager = "npm" | "pnpm" | "yarn";
@@ -414,6 +688,38 @@ const ENTRY_FILES = [
 // Python entry files, tried in order of preference.
 const PYTHON_ENTRY_FILES = ["bot.py", "main.py", "app.py", "run.py"];
 
+// File extensions that plausibly denote a script's entry point when scanning
+// its command line (e.g. "node dist/index.mjs" -> "dist/index.mjs").
+const SCRIPT_ENTRY_EXTENSIONS = [".mjs", ".cjs", ".js", ".ts"];
+
+/**
+ * Best-effort extraction of the file a run script actually launches, e.g.
+ * "node dist/index.mjs" -> "dist/index.mjs", "tsx watch src/index.ts" ->
+ * "src/index.ts". Returns null when no file-like token is found (e.g.
+ * "next start"), in which case the script is trusted as-is.
+ */
+function extractScriptEntryFile(script: string): string | null {
+  const tokens = script.split(/\s+/).filter(Boolean);
+  for (const tok of tokens) {
+    if (tok.startsWith("-")) continue;
+    if (SCRIPT_ENTRY_EXTENSIONS.some((ext) => tok.endsWith(ext))) {
+      return tok;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves the command used to start a Node.js bot.
+ *
+ * Crucially, this does NOT blindly trust whatever `package.json` claims —
+ * a common failure mode is a "start" script like "node dist/index.mjs"
+ * left over from a TypeScript template where `dist/` was never built (or
+ * never got shipped in the ZIP). Each candidate script's referenced entry
+ * file is checked for existence on disk before it's trusted; if it's
+ * missing, we keep searching rather than handing back a command that is
+ * guaranteed to crash immediately.
+ */
 function resolveNodeStartCommand(
   projectRoot: string,
   pkg: Record<string, unknown>,
@@ -422,9 +728,15 @@ function resolveNodeStartCommand(
   const scripts = (pkg["scripts"] ?? {}) as Record<string, string>;
 
   for (const name of RUNNABLE_SCRIPTS) {
-    if (typeof scripts[name] === "string") {
-      return { cmd: pm, args: ["run", name], label: `${pm} run ${name}` };
+    const script = scripts[name];
+    if (typeof script !== "string") continue;
+    const referenced = extractScriptEntryFile(script);
+    if (referenced && !fs.existsSync(path.join(projectRoot, referenced))) {
+      // Points at a file that doesn't exist (e.g. an unbuilt dist/ output) —
+      // don't trust it yet, keep looking for something that will actually run.
+      continue;
     }
+    return { cmd: pm, args: ["run", name], label: `${pm} run ${name}` };
   }
 
   // Honour package.json "main" field if the file exists
@@ -437,6 +749,17 @@ function resolveNodeStartCommand(
   for (const candidate of ENTRY_FILES) {
     if (fs.existsSync(path.join(projectRoot, candidate))) {
       return { cmd: "node", args: [candidate], label: `node ${candidate}` };
+    }
+  }
+
+  // Nothing verifiably runnable was found. As a last resort, surface the
+  // first runnable script anyway (even though its target is missing) so the
+  // resulting crash/error message is at least informative instead of a
+  // generic "no way to start" — this only triggers when every earlier check,
+  // including a build step, has already failed to produce anything usable.
+  for (const name of RUNNABLE_SCRIPTS) {
+    if (typeof scripts[name] === "string") {
+      return { cmd: pm, args: ["run", name], label: `${pm} run ${name}` };
     }
   }
 
@@ -628,44 +951,101 @@ export async function hostUploadedZip(params: {
   await stripPlatformFiles(extractRoot);
   logger.info({ ticketId }, "Platform files stripped from extracted ZIP");
 
-  const found = await findProjectRoot(extractRoot);
-  if (!found) {
-    const message =
-      "No supported project was found in the ZIP. Include a package.json (Node.js) or a requirements.txt / bot.py (Python) in the archive.";
-    return reportFailure(ticketId, fileName, "error", { message });
+  // ── Bot-root detection ──────────────────────────────────────────────────
+  appendLiveLog(ticketId, "[Lumora] Scanning ZIP for bot project root…\n");
+  const rootResult = await findProjectRoot(extractRoot);
+
+  if (rootResult.kind === "not_found") {
+    return reportFailure(ticketId, fileName, "error", {
+      message:
+        "No supported project was found in the ZIP.\n\n" +
+        "For a Node.js bot, include a package.json with a \"start\" script.\n" +
+        "For a Python bot, include a requirements.txt and a bot.py / main.py.",
+    });
   }
 
-  const { dir: projectRoot, language, pkg } = found;
-  logger.info({ ticketId, projectRoot, language }, "Bot project root detected");
-
-  let startCommand: StartCommand | { error: string };
-  let pm: PackageManager | null = null;
-
-  if (language === "node") {
-    pm = detectPackageManager(projectRoot, pkg!);
-    startCommand = resolveNodeStartCommand(projectRoot, pkg!, pm);
-  } else {
-    startCommand = resolvePythonStartCommand(projectRoot);
+  if (rootResult.kind === "workspace_only") {
+    return reportFailure(ticketId, fileName, "error", {
+      message:
+        "The uploaded ZIP appears to be a workspace/monorepo root (it contains " +
+        "pnpm-workspace.yaml or a package.json with a \"workspaces\" field) but " +
+        "no usable bot was found inside it.\n\n" +
+        "Please upload a ZIP of the individual bot folder — the directory that " +
+        "contains your bot's own package.json — rather than the entire workspace.",
+    });
   }
 
-  if ("error" in startCommand) {
-    return reportFailure(ticketId, fileName, "error", { message: startCommand.error });
+  if (rootResult.kind === "ambiguous") {
+    const list = rootResult.candidates
+      .map((c) => `  • ${c.label}`)
+      .join("\n");
+    return reportFailure(ticketId, fileName, "error", {
+      message:
+        "Multiple Discord bot packages were found in the ZIP and it's not " +
+        "clear which one to run:\n\n" +
+        list +
+        "\n\nPlease upload a ZIP containing only the specific bot you want to host, " +
+        "rather than the whole workspace.",
+    });
+  }
+
+  // rootResult.kind === "found"
+  const { dir: projectRoot, language, pkg, hasDiscord } = rootResult.root;
+
+  // Relative path for human-readable log messages.
+  const relRoot = path.relative(extractRoot, projectRoot) || ".";
+  const discordNote = hasDiscord
+    ? language === "node" ? " (discord.js detected)" : " (discord.py detected)"
+    : " ⚠ no Discord library detected in dependencies";
+
+  logger.info({ ticketId, projectRoot, language, hasDiscord }, "Bot project root detected");
+  appendLiveLog(
+    ticketId,
+    `[Lumora] Bot root: ${relRoot}${discordNote}\n` +
+    `[Lumora] Language: ${language === "node" ? "Node.js" : "Python"}\n`,
+  );
+
+  // Reject if no known Discord library is present in the winning candidate.
+  // A valid Discord bot must declare discord.js, discord.py, or a compatible
+  // library. Without it, we're almost certainly looking at the wrong package.
+  if (!hasDiscord) {
+    const hint = language === "node"
+      ? 'Make sure "discord.js" (or a compatible library) is listed under ' +
+        '"dependencies" in your bot\'s package.json.'
+      : "Make sure discord.py, nextcord, or a similar library is listed in requirements.txt.";
+    return reportFailure(ticketId, fileName, "error", {
+      message:
+        "The uploaded ZIP does not appear to be a Discord bot — no known Discord " +
+        "library was found in the package at " +
+        `"${relRoot}".\n\n` +
+        hint,
+    });
+  }
+
+  const pm: PackageManager | null = language === "node"
+    ? detectPackageManager(projectRoot, pkg!)
+    : null;
+
+  if (pm) {
+    appendLiveLog(ticketId, `[Lumora] Package manager: ${pm}\n`);
   }
 
   await updateHostedBot(ticketId, { language });
 
-  // Build + run the install step appropriate for each language/package manager.
+  // ── Dependency installation ─────────────────────────────────────────────
   let install: { exitedCleanly: boolean; exitCode: number | null; output: string };
   if (language === "node") {
+    appendLiveLog(ticketId, `[Lumora] Running ${pm} install…\n`);
     const installArgs =
       pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
       pm === "yarn" ? ["install", "--non-interactive"] :
       ["install", "--no-audit", "--no-fund"];
     install = await runCommand(pm!, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
   } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
+    appendLiveLog(ticketId, "[Lumora] Running pip install -r requirements.txt…\n");
     install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
   } else {
-    // No requirements.txt — nothing to install, treat as a clean no-op.
+    // No requirements.txt — nothing to install.
     install = { exitedCleanly: true, exitCode: 0, output: "" };
   }
 
@@ -676,9 +1056,38 @@ export async function hostUploadedZip(params: {
           ? "Dependency installation failed."
           : "Failed to install Python dependencies from requirements.txt.",
       detail: install.output,
-      startCommand: startCommand.label,
     });
   }
+
+  // ── Build step (TypeScript / compiled Node bots) ────────────────────────
+  // Running build before resolving the start command ensures dist/ exists
+  // before we check whether the entry file is present on disk.
+  if (language === "node") {
+    const scripts = (pkg!["scripts"] ?? {}) as Record<string, string>;
+    if (typeof scripts["build"] === "string") {
+      logger.info({ ticketId }, "Running build script before start");
+      appendLiveLog(ticketId, `[Lumora] Running ${pm} run build…\n`);
+      const build = await runCommand(pm!, ["run", "build"], projectRoot, INSTALL_TIMEOUT_MS);
+      if (!build.exitedCleanly) {
+        return reportFailure(ticketId, fileName, "error", {
+          message: 'The build step ("build" script in package.json) failed.',
+          detail: build.output,
+        });
+      }
+    }
+  }
+
+  // ── Start-command resolution ────────────────────────────────────────────
+  // Done after install + build so existence checks see the final filesystem.
+  const startCommand: StartCommand | { error: string } = language === "node"
+    ? resolveNodeStartCommand(projectRoot, pkg!, pm!)
+    : resolvePythonStartCommand(projectRoot);
+
+  if ("error" in startCommand) {
+    return reportFailure(ticketId, fileName, "error", { message: startCommand.error });
+  }
+
+  appendLiveLog(ticketId, `[Lumora] Starting bot: ${startCommand.label}\n`);
 
   // Store the actual project root (may be a subdirectory of extractRoot) so restarts work.
   await updateHostedBot(ticketId, {

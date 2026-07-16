@@ -2,3 +2,4 @@
 - [Messy GitHub imports](messy-github-imports.md) — imported repos can contain accidental duplicate/nested copies of the whole project that create duplicate artifacts and workflows.
 - [Hosted bot process sandboxing](hosted-bot-sandboxing.md) — env merge order for spawning untrusted uploaded processes: strip host secrets, then let user vars win last.
 - [Crash-loop auto-restart](crash-loop-auto-restart.md) — track intentional-stop flags and use a stability-reset window so auto-restart doesn't misfire or loop forever.
+- [File manager implementation](file-manager-implementation.md) — per-bot file browser/editor: backend sandbox scoping, routes pattern, frontend tree+CodeMirror, runner build-step fix.

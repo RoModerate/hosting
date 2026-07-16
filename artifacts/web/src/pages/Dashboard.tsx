@@ -27,10 +27,13 @@ import {
   Save,
   Eye,
   EyeOff,
+  Files,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import FileManager from '@/components/FileManager';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -307,11 +310,27 @@ export default function Dashboard() {
             <Clock className="h-3.5 w-3.5 text-primary/60" />
             <span>EXPIRES</span>
             <span className="text-foreground font-semibold">
-              {formatDistanceToNow(new Date(session.expiresAt), { addSuffix: true })}
+              {(() => { try { const d = new Date(session.expiresAt as unknown as string); return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true }); } catch { return '—'; } })()}
             </span>
           </div>
         </header>
 
+        <Tabs defaultValue="overview" className="space-y-5">
+          <TabsList className="font-mono text-xs tracking-widest bg-background/60 border border-border/50 h-9">
+            <TabsTrigger value="overview" className="text-[10px] tracking-widest px-4 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
+              OVERVIEW
+            </TabsTrigger>
+            <TabsTrigger value="files" className="text-[10px] tracking-widest px-4 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none flex items-center gap-1.5">
+              <Files className="h-3 w-3" />
+              FILES
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="files" className="mt-0">
+            <FileManager hasBot={!!hostedBot} />
+          </TabsContent>
+
+          <TabsContent value="overview" className="mt-0">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Main panel */}
           <div className="lg:col-span-2 space-y-5">
@@ -673,6 +692,8 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
