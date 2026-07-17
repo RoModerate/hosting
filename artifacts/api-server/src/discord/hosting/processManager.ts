@@ -23,6 +23,27 @@ const liveLogs = new Map<number, string>();
 const restartAttempts = new Map<number, number>();
 const stabilityTimers = new Map<number, NodeJS.Timeout>();
 
+// Pending scheduled restart timeouts — cancelled when Stop is called so a
+// queued auto-restart can't fire after the user explicitly stops the bot.
+const pendingRestartTimers = new Map<number, NodeJS.Timeout>();
+
+export function schedulePendingRestart(ticketId: number, fn: () => void, delayMs: number): void {
+  cancelPendingRestart(ticketId);
+  const t = setTimeout(() => {
+    pendingRestartTimers.delete(ticketId);
+    fn();
+  }, delayMs);
+  pendingRestartTimers.set(ticketId, t);
+}
+
+export function cancelPendingRestart(ticketId: number): void {
+  const t = pendingRestartTimers.get(ticketId);
+  if (t) {
+    clearTimeout(t);
+    pendingRestartTimers.delete(ticketId);
+  }
+}
+
 export function setRunningProcess(ticketId: number, child: ChildProcess): void {
   runningProcesses.set(ticketId, { child, startedAt: new Date() });
 }
@@ -61,6 +82,8 @@ export function stopProcess(ticketId: number): void {
   }
   runningProcesses.delete(ticketId);
   clearStabilityTimer(ticketId);
+  // Cancel any queued auto-restart so it can't fire after an explicit stop.
+  cancelPendingRestart(ticketId);
 }
 
 export function clearRunningProcess(ticketId: number): void {

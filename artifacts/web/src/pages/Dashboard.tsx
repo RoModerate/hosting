@@ -596,7 +596,9 @@ export default function Dashboard() {
 
   const { hostedBot } = session;
   const isProcessing = hostedBot?.status === 'installing' || hostedBot?.status === 'starting' || hostedBot?.status === 'connecting';
+  // Stop is always available so users can escape a stuck loop — never gate it on isProcessing.
   const isBusy = restartBot.isPending || stopBot.isPending || isProcessing || removingBot;
+  const canStop = !stopBot.isPending && hostedBot?.status !== 'stopped';
 
   const expiryStr = (() => {
     try {
@@ -708,7 +710,7 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={handleStop}
-                    disabled={isBusy || hostedBot.status === 'stopped'}
+                    disabled={!canStop}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <PowerOff className="h-3.5 w-3.5" />

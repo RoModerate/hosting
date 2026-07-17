@@ -10,6 +10,8 @@ import { ticketBotDir, ticketUploadDir } from "./paths";
 import {
   appendLiveLog,
   armStabilityReset,
+ cancelPendingRestart,
+ schedulePendingRestart,
   clearRunningProcess,
   consumeIntentionalStop,
   getAutoRestartAttempts,
@@ -1284,7 +1286,7 @@ function scheduleAutoRestart(
     .where(eq(hostedBotsTable.ticketId, ticketId))
     .catch(() => undefined);
 
-  setTimeout(() => {
+  schedulePendingRestart(ticketId, () => {
     restartHostedBot(ticketId, onCrash, { isAutoRestart: true }).catch((err) => {
       logger.error({ err, ticketId }, "Auto-restart attempt failed");
     });
@@ -2193,8 +2195,9 @@ export async function stopHostedBot(ticketId: number): Promise<HostResult> {
     return { status: "error", message: "No bot has been uploaded to this ticket yet." };
   }
 
-  stopProcess(ticketId);
+  stopProcess(ticketId); // also cancels any pending restart timer
   resetAutoRestartAttempts(ticketId);
+  cancelPendingRestart(ticketId); // belt-and-suspenders: ensure no queued restart fires
 
   await updateHostedBot(ticketId, {
     status: "stopped",
@@ -2218,23 +2221,27 @@ export async function resumeHostedBotsOnBoot(
     .from(hostedBotsTable)
     .where(eq(hostedBotsTable.status, "starting"));
 
-  const resumableStarting = startingRows.filter((r) => !!r.extractPath);
-  const stuckStarting    = startingRows.filter((r) => !r.extractPath);
-
-  if (stuckStarting.length > 0) {
+  // Any bot stuck in "starting" at boot time had its process killed when the
+  // server went down. Auto-resuming them hides genuine crash-loop problems and
+  // confused users who tried to stop a bot before the server restarted.
+  // Reset them all to "stopped" and let the user decide when to restart.
+  if (startingRows.length > 0) {
     await db
       .update(hostedBotsTable)
       .set({
         status: "stopped",
-        errorMessage: "Upload interrupted — please re-upload the ZIP file.",
+        errorMessage: null,
       })
       .where(
         inArray(
           hostedBotsTable.ticketId,
-          stuckStarting.map((r) => r.ticketId),
+          startingRows.map((r) => r.ticketId),
         ),
       );
   }
+
+  const resumableStarting: typeof startingRows = [];
+  const stuckStarting: typeof startingRows = [];
 
   // Resume any bot that was live at the time the server was restarted,
   // regardless of which phase of the Discord connection lifecycle it was in.
