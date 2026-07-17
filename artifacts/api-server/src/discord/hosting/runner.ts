@@ -2077,7 +2077,8 @@ export async function restartHostedBot(
 
   if (!fs.existsSync(tmpRoot)) {
     // /tmp was wiped (server restart). Re-isolate from the persistent copy.
-    appendLiveLog(ticketId, "[Lumora] Restoring isolated build directory…\n");
+    appendLiveLog(ticketId, "[Lumora] Restoring bot files…\n");
+    await updateHostedBot(ticketId, { errorMessage: "Restoring bot files…" });
     try {
       projectRoot = await isolateBot(originalBotDir, ticketId);
       // Re-install dependencies since node_modules was in the tmp dir.
@@ -2091,28 +2092,31 @@ export async function restartHostedBot(
         const installArgs = pm === "pnpm" ? ["install", "--no-frozen-lockfile"]
           : pm === "yarn" ? ["install", "--non-interactive"]
           : ["install", "--no-audit", "--no-fund"];
-        appendLiveLog(ticketId, `[Lumora] Re-installing dependencies (${pm} ${installArgs.join(" ")})…\n`);
+        appendLiveLog(ticketId, `[Lumora] Installing dependencies (${pm})…\n`);
+        await updateHostedBot(ticketId, { errorMessage: `Installing dependencies (${pm})… this may take a minute` });
         const install = await runCommand(pm, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
         if (!install.exitedCleanly) {
           return reportFailure(ticketId, row.fileName, "error", {
-            message: "Dependency re-installation failed after server restart.",
+            message: "Dependency installation failed. Check the Logs tab for details.",
             detail: install.output,
           });
         }
       } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
-        appendLiveLog(ticketId, "[Lumora] Re-installing Python dependencies…\n");
+        appendLiveLog(ticketId, "[Lumora] Installing Python dependencies…\n");
+        await updateHostedBot(ticketId, { errorMessage: "Installing Python dependencies… this may take a minute" });
         const install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
         if (!install.exitedCleanly) {
           return reportFailure(ticketId, row.fileName, "error", {
-            message: "Python dependency re-installation failed after server restart.",
+            message: "Python dependency installation failed. Check the Logs tab for details.",
             detail: install.output,
           });
         }
       }
+      await updateHostedBot(ticketId, { errorMessage: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return reportFailure(ticketId, row.fileName, "error", {
-        message: "Failed to restore the bot's isolated build directory.",
+        message: "Failed to restore the bot's files. Please try restarting again.",
         detail: msg,
       });
     }
@@ -2205,27 +2209,46 @@ export async function stopHostedBot(ticketId: number): Promise<HostResult> {
 export async function resumeHostedBotsOnBoot(
   notify: (ticketId: number, result: HostResult) => void,
 ): Promise<void> {
-  // Reset any bots that were mid-launch when the server went down — their
-  // process is definitely gone, so "starting" is stale. Mark them stopped so
-  // the user can restart cleanly rather than seeing a forever-"starting" state.
-  await db
-    .update(hostedBotsTable)
-    .set({
-      status: "stopped",
-      errorMessage: "Server restarted during launch — press Restart to try again.",
-    })
+  // Any bot whose process is gone needs restarting or resetting.
+  // "starting" bots that already have an extractPath (were fully uploaded)
+  // can be auto-resumed just like running bots.  Bots with no extractPath
+  // were mid-upload when we went down — reset them to stopped.
+  const startingRows = await db
+    .select()
+    .from(hostedBotsTable)
     .where(eq(hostedBotsTable.status, "starting"));
+
+  const resumableStarting = startingRows.filter((r) => !!r.extractPath);
+  const stuckStarting    = startingRows.filter((r) => !r.extractPath);
+
+  if (stuckStarting.length > 0) {
+    await db
+      .update(hostedBotsTable)
+      .set({
+        status: "stopped",
+        errorMessage: "Upload interrupted — please re-upload the ZIP file.",
+      })
+      .where(
+        inArray(
+          hostedBotsTable.ticketId,
+          stuckStarting.map((r) => r.ticketId),
+        ),
+      );
+  }
 
   // Resume any bot that was live at the time the server was restarted,
   // regardless of which phase of the Discord connection lifecycle it was in.
-  const rows = await db
+  // Also resume bots that were mid-launch but have a persistent extractPath.
+  const liveRows = await db
     .select()
     .from(hostedBotsTable)
     .where(
       inArray(hostedBotsTable.status, ["running", "online", "connecting", "login_failed"]),
     );
 
-  for (const row of rows) {
+  const rowsToResume = [...liveRows, ...resumableStarting];
+
+  for (const row of rowsToResume) {
     const [ticket] = await db
       .select()
       .from(ticketsTable)

@@ -684,11 +684,15 @@ export default function Dashboard() {
                   <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-2.5 bg-blue-500/[0.05]">
                     <Loader2 className="h-3 w-3 text-blue-400 animate-spin shrink-0" />
                     <span className="text-xs font-mono text-blue-400">
-                      {hostedBot.status === 'installing' ? 'Installing dependencies…'
+                      {hostedBot.errorMessage
+                        ? hostedBot.errorMessage
+                        : hostedBot.status === 'installing' ? 'Installing dependencies…'
                         : hostedBot.status === 'starting' ? 'Starting bot…'
-                        : 'Connecting…'}
+                        : 'Connecting to Discord…'}
                     </span>
-                    <span className="text-xs text-white/20 font-mono ml-1">This may take a minute</span>
+                    {!hostedBot.errorMessage && (
+                      <span className="text-xs text-white/20 font-mono ml-1">This may take a minute</span>
+                    )}
                   </div>
                 )}
 
@@ -789,7 +793,7 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {hostedBot?.errorMessage && (
+                {hostedBot?.errorMessage && !isProcessing && (
                   <div className="rounded-xl border border-red-500/12 bg-red-500/[0.03] overflow-hidden">
                     <button
                       className="w-full flex items-center justify-between px-4 py-3 hover:bg-red-500/[0.03] transition-colors"
