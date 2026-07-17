@@ -24,7 +24,7 @@ import {
   updateHostedBot,
   type HostResult,
 } from "../discord/hosting/runner";
-import { getLiveLog } from "../discord/hosting/processManager";
+import { getLiveLog, clearLiveLog, checkAndSetRestartCooldown, clearRestartCooldown } from "../discord/hosting/processManager";
 import { formatResultMessage } from "../discord/resultFormat";
 import { notifyTicketChannel } from "../discord/notify";
 import {
@@ -338,6 +338,8 @@ router.post("/bots/stop", async (req, res) => {
   }
 
   const result = await stopHostedBot(session.ticket.id);
+  // Clear cooldown so next restart after a stop is immediate.
+  clearRestartCooldown(session.ticket.id);
 
   notifyTicketChannel(
     session.ticket.id,
@@ -360,6 +362,19 @@ router.post("/bots/restart", async (req, res) => {
     res.status(400).json({ error: "No bot has been uploaded to this ticket yet." });
     return;
   }
+
+  // Enforce a per-ticket cooldown to prevent restart spam loops.
+  const cooldown = checkAndSetRestartCooldown(session.ticket.id);
+  if (!cooldown.allowed) {
+    res.status(429).json({
+      error: `Please wait ${cooldown.remainingSec}s before restarting again.`,
+      remainingSec: cooldown.remainingSec,
+    });
+    return;
+  }
+
+  // Clear the live log immediately so users see clean output for this restart.
+  clearLiveLog(session.ticket.id);
 
   await updateHostedBot(session.ticket.id, {
     status: "starting",

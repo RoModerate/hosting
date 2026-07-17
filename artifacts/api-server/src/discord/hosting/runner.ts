@@ -10,9 +10,10 @@ import { ticketBotDir, ticketUploadDir } from "./paths";
 import {
   appendLiveLog,
   armStabilityReset,
- cancelPendingRestart,
- schedulePendingRestart,
+  cancelPendingRestart,
+  schedulePendingRestart,
   clearRunningProcess,
+  clearLiveLog,
   consumeIntentionalStop,
   getAutoRestartAttempts,
   getLiveLog,
@@ -2099,8 +2100,13 @@ export async function restartHostedBot(
     return { status: "error", message: "No bot has been uploaded to this ticket yet." };
   }
 
+  // Stop any running process and cancel queued restarts.
   stopProcess(ticketId);
-  if (!opts?.isAutoRestart) resetAutoRestartAttempts(ticketId);
+  if (!opts?.isAutoRestart) {
+    resetAutoRestartAttempts(ticketId);
+    // Clear the live log so the user sees fresh output for this restart attempt.
+    clearLiveLog(ticketId);
+  }
 
   // row.extractPath is the persistent original bot dir (inside storage/).
   // The actual run directory is the isolated /tmp copy. Re-isolate if it's
@@ -2117,12 +2123,11 @@ export async function restartHostedBot(
   if (!fs.existsSync(tmpRoot)) {
     // /tmp was wiped (server restart). Re-isolate from the persistent copy.
     appendLiveLog(ticketId, "[Lumora] Restoring bot files…\n");
-    await updateHostedBot(ticketId, { errorMessage: "Restoring bot files…" });
+    await updateHostedBot(ticketId, { status: "installing", errorMessage: "Restoring bot files…" });
     try {
       projectRoot = await isolateBot(originalBotDir, ticketId);
       // Re-install dependencies since node_modules was in the tmp dir.
-      const [row2] = await db.select().from(hostedBotsTable).where(eq(hostedBotsTable.ticketId, ticketId));
-      const lang = row2?.language ?? "node";
+      const lang = (row.language as BotLanguage) ?? "node";
       if (lang === "node") {
         const pkgRaw = fs.existsSync(path.join(projectRoot, "package.json"))
           ? fs.readFileSync(path.join(projectRoot, "package.json"), "utf-8") : "{}";
@@ -2161,20 +2166,68 @@ export async function restartHostedBot(
     }
   }
 
+  await updateHostedBot(ticketId, { status: "starting", errorMessage: null, aiExplanation: null });
+
   const [cmd, ...args] = row.startCommand.split(" ");
-  const userVars = await getHostedBotEnvVars(ticketId);
+  const userVars = resolveTokenAlias(await getHostedBotEnvVars(ticketId));
   const probe = await runStartupProbe(cmd!, args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
     logger.warn(
       { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
-      "Bot crashed on restart",
+      "Bot crashed on restart — attempting AI repair",
     );
     await updateHostedBot(ticketId, { restartCount: row.restartCount + 1 });
+
+    // Run the same AI repair loop used during initial deploy.
+    const lang = (row.language as BotLanguage) ?? "node";
+    let pkgForRepair: Record<string, unknown> | null = null;
+    if (lang === "node") {
+      try {
+        pkgForRepair = JSON.parse(
+          await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
+        ) as Record<string, unknown>;
+      } catch { /* ignore */ }
+    }
+    const pmForRepair: PackageManager | null =
+      lang === "node" && pkgForRepair
+        ? detectPackageManager(projectRoot, pkgForRepair)
+        : null;
+
+    const [startCmdStr, ...startCmdArgs] = row.startCommand.split(" ");
+    const startCmdForRepair: StartCommand = {
+      cmd: startCmdStr!,
+      args: startCmdArgs,
+      label: row.startCommand,
+    };
+
+    const repairOutcome = await runRepairLoop({
+      ticketId,
+      projectRoot,
+      persistentBotDir: originalBotDir,
+      language: lang,
+      pkg: pkgForRepair,
+      pm: pmForRepair,
+      fileName: row.fileName,
+      startCmd: startCmdForRepair,
+      crashOutput: probe.output,
+      userVars,
+      onCrash,
+    });
+
+    if (repairOutcome.fixed) {
+      return {
+        status: "running",
+        message: repairOutcome.friendlyMessage,
+        startCommand: row.startCommand,
+      };
+    }
+
     const diagnosis = diagnoseBotCrash(probe.output, userVars);
     return reportFailure(ticketId, row.fileName, "crashed", {
-      message: diagnosis ?? `The bot crashed on restart (exit code ${probe.exitCode ?? "unknown"}).`,
+      message: diagnosis ?? repairOutcome.friendlyMessage,
       detail: diagnosis ? probe.output : undefined,
+      startCommand: row.startCommand,
     });
   }
 

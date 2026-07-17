@@ -300,9 +300,11 @@ export function resolveTokenAlias(userVars: Record<string, string>): Record<stri
 // ─── AI-powered crash repair ──────────────────────────────────────────────────
 
 interface AIFix {
-  type: "add_start_script" | "install_package" | "create_requirements" | "noop";
+  type: "add_start_script" | "install_package" | "create_requirements" | "write_file" | "noop";
   entry_file?: string;    // for add_start_script
   package_name?: string;  // for install_package (single package name)
+  file_path?: string;     // for write_file (relative path within project)
+  file_content?: string;  // for write_file (complete new content, max 8 KB)
   description: string;
 }
 
@@ -335,6 +337,7 @@ async function callRepairAI(params: {
     '"add_start_script" — add/update scripts.start in package.json, set entry_file to the runnable file',
     '"install_package" — install a single missing npm/pip package, set package_name',
     '"create_requirements" — create a requirements.txt for Python bots',
+    '"write_file" — create or overwrite a small source file; set file_path (relative) and file_content (complete new file, max 4 KB). Use to fix env var reading, add missing client.login(), or patch broken entry files',
     '"noop" — no automatic fix possible for this error',
   ];
 
@@ -372,6 +375,7 @@ async function callRepairAI(params: {
     "Rules:",
     "- Only suggest install_package for well-known, safe packages (discord.js, dotenv, axios, pg, mongoose, etc.)",
     "- Only suggest add_start_script if you can see a runnable .js or .py file in the file tree",
+    "- For write_file: only write .js/.mjs/.py/.json/.txt files; max 4 KB content; use it to fix env var reading (e.g. add process.env.DISCORD_BOT_TOKEN fallback aliases), add missing client.login(), or create a minimal working entry file",
     "- Never mention tokens, secrets, or environment variable values in friendly_message",
     "- If the crash requires user action (wrong token, intents not enabled, logic errors), set requires_user_action=true",
     "- Limit fixes array to at most 2 items",
@@ -488,6 +492,35 @@ async function applyAIFix(
           logger.warn({ err, pkg }, "pip install fix failed");
           return null;
         }
+      }
+    }
+
+    if (fix.type === "write_file" && fix.file_path && typeof fix.file_content === "string") {
+      // Validate: relative path only, safe extension, max 8 KB
+      const relPath = fix.file_path.replace(/^\/+/, "").replace(/\.\./g, "");
+      const ALLOWED_WRITE_EXTS = new Set([".js", ".mjs", ".cjs", ".py", ".json", ".txt", ".env"]);
+      const ext = path.extname(relPath).toLowerCase();
+      if (!relPath || !ALLOWED_WRITE_EXTS.has(ext)) {
+        logger.info({ relPath, ext }, "Skipping write_file: disallowed path or extension");
+        return null;
+      }
+      if (fix.file_content.length > 8192) {
+        logger.info({ relPath }, "Skipping write_file: content exceeds 8 KB limit");
+        return null;
+      }
+      try {
+        const destPath = path.join(projectRoot, relPath);
+        const destPersist = path.join(persistentDir, relPath);
+        // Create parent dirs if needed
+        await fsp.mkdir(path.dirname(destPath), { recursive: true });
+        await fsp.writeFile(destPath, fix.file_content, "utf-8");
+        await fsp.mkdir(path.dirname(destPersist), { recursive: true }).catch(() => {});
+        await fsp.writeFile(destPersist, fix.file_content, "utf-8").catch(() => {});
+        appendLiveLog(ticketId, `[Lumora] Patched file: ${relPath}\n`);
+        return fix.description || `Patched ${relPath}`;
+      } catch (err) {
+        logger.warn({ err, relPath }, "write_file fix failed");
+        return null;
       }
     }
 

@@ -161,3 +161,34 @@ export function armStabilityReset(ticketId: number, stableAfterMs = 300_000): vo
 export function listTrackedTicketIds(): number[] {
   return Array.from(runningProcesses.keys());
 }
+
+// ─── Manual restart cooldown ──────────────────────────────────────────────────
+// Prevents users from spamming the restart button and creating an artificial
+// crash-loop. Each successful manual restart sets a cooldown; auto-restarts
+// and the initial deploy are exempt.
+
+const RESTART_COOLDOWN_MS = 20_000; // 20 seconds
+const lastManualRestartAt = new Map<number, number>();
+
+/**
+ * Checks whether a manual restart is allowed for the given ticket.
+ * If allowed, records the current time so future calls respect the cooldown.
+ * Returns { allowed: true } or { allowed: false, remainingSec: N }.
+ */
+export function checkAndSetRestartCooldown(
+  ticketId: number,
+): { allowed: boolean; remainingSec: number } {
+  const last = lastManualRestartAt.get(ticketId) ?? 0;
+  const elapsed = Date.now() - last;
+  if (elapsed < RESTART_COOLDOWN_MS) {
+    const remaining = Math.ceil((RESTART_COOLDOWN_MS - elapsed) / 1000);
+    return { allowed: false, remainingSec: remaining };
+  }
+  lastManualRestartAt.set(ticketId, Date.now());
+  return { allowed: true, remainingSec: 0 };
+}
+
+/** Clears the cooldown for a ticket (e.g. when the bot is stopped). */
+export function clearRestartCooldown(ticketId: number): void {
+  lastManualRestartAt.delete(ticketId);
+}
