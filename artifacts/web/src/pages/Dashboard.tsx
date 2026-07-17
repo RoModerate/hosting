@@ -12,7 +12,6 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   Terminal,
   RotateCw,
-  Clock,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -28,10 +27,9 @@ import {
   EyeOff,
   Files,
   PowerOff,
-  FolderOpen,
+  Upload,
+  Clock,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import FileManager from '@/components/FileManager';
@@ -40,75 +38,47 @@ const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
 type EnvEntry = { key: string; value: string; hidden: boolean };
 
-const STATUS_META: Record<string, { label: string; color: string; glow: string; icon: React.ReactNode }> = {
-  online: {
-    label: 'ONLINE',
-    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-    glow: '0 0 12px rgba(52,211,153,0.4)',
-    icon: <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" /></span>,
-  },
-  running: {
-    // legacy alias — old records stored "running"; display as ONLINE
-    label: 'ONLINE',
-    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-    glow: '0 0 12px rgba(52,211,153,0.4)',
-    icon: <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" /></span>,
-  },
-  connecting: {
-    label: 'CONNECTING',
-    color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
-    glow: '0 0 12px rgba(234,179,8,0.3)',
-    icon: <Loader2 className="h-3 w-3 text-yellow-400 animate-spin" />,
-  },
-  login_failed: {
-    label: 'LOGIN FAILED',
-    color: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
-    glow: '0 0 12px rgba(249,115,22,0.3)',
-    icon: <AlertTriangle className="h-3 w-3 text-orange-400" />,
-  },
-  crashed: {
-    label: 'CRASHED',
-    color: 'text-red-400 border-red-500/30 bg-red-500/10',
-    glow: '0 0 12px rgba(248,113,113,0.3)',
-    icon: <XCircle className="h-3 w-3 text-red-400" />,
-  },
-  error: {
-    label: 'ERROR',
-    color: 'text-red-400 border-red-500/30 bg-red-500/10',
-    glow: '0 0 12px rgba(248,113,113,0.3)',
-    icon: <AlertTriangle className="h-3 w-3 text-red-400" />,
-  },
-  installing: {
-    label: 'INSTALLING',
-    color: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-    glow: '0 0 12px rgba(96,165,250,0.3)',
-    icon: <Loader2 className="h-3 w-3 text-blue-400 animate-spin" />,
-  },
-  starting: {
-    label: 'STARTING',
-    color: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-    glow: '0 0 12px rgba(96,165,250,0.3)',
-    icon: <Loader2 className="h-3 w-3 text-blue-400 animate-spin" />,
-  },
-  stopped: {
-    label: 'OFFLINE',
-    color: 'text-muted-foreground border-border bg-muted/30',
-    glow: 'none',
-    icon: <span className="h-2 w-2 rounded-full bg-muted-foreground" />,
-  },
+// ─── Status config ─────────────────────────────────────────────────────────
+const STATUS_META: Record<string, { label: string; dot: string; text: string; border: string; bg: string }> = {
+  online:        { label: 'Online',      dot: 'bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/[0.06]' },
+  running:       { label: 'Online',      dot: 'bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/[0.06]' },
+  connecting:    { label: 'Connecting',  dot: 'bg-yellow-400 animate-pulse', text: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/[0.06]' },
+  login_failed:  { label: 'Login failed',dot: 'bg-orange-400', text: 'text-orange-400', border: 'border-orange-500/20', bg: 'bg-orange-500/[0.06]' },
+  crashed:       { label: 'Crashed',     dot: 'bg-red-400', text: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/[0.06]' },
+  error:         { label: 'Error',       dot: 'bg-red-400', text: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/[0.06]' },
+  installing:    { label: 'Installing',  dot: 'bg-blue-400 animate-pulse', text: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/[0.06]' },
+  starting:      { label: 'Starting',    dot: 'bg-blue-400 animate-pulse', text: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/[0.06]' },
+  stopped:       { label: 'Offline',     dot: 'bg-white/20', text: 'text-white/30', border: 'border-white/[0.07]', bg: 'bg-white/[0.02]' },
 };
 
-function getStatusMeta(status: string) {
+function getStatus(status: string) {
   return STATUS_META[status] ?? STATUS_META.stopped;
 }
 
+// ─── StatusBadge ────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const s = getStatus(status);
+  const spinning = status === 'installing' || status === 'starting' || status === 'connecting';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono font-semibold ${s.text} ${s.border} ${s.bg}`}>
+      {spinning
+        ? <Loader2 className="h-3 w-3 animate-spin" />
+        : <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      }
+      {s.label}
+    </span>
+  );
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [removingBot, setRemovingBot] = useState(false);
 
-  // Env vars state
+  // Env vars
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>([]);
   const [envLoaded, setEnvLoaded] = useState(false);
   const [envSaving, setEnvSaving] = useState(false);
@@ -130,12 +100,9 @@ export default function Dashboard() {
   const stopBot = useStopBot();
 
   useEffect(() => {
-    if (isError && (error as any)?.status === 401) {
-      setLocation('/');
-    }
+    if (isError && (error as any)?.status === 401) setLocation('/login');
   }, [isError, error, setLocation]);
 
-  // Load env vars once we have a session
   useEffect(() => {
     if (!session || envLoaded) return;
     setEnvLoaded(true);
@@ -155,17 +122,17 @@ export default function Dashboard() {
     setEnvDirty(true);
   };
 
-  const handleEnvChange = (index: number, field: 'key' | 'value', val: string) => {
-    setEnvEntries((prev) => prev.map((e, i) => i === index ? { ...e, [field]: val } : e));
+  const handleEnvChange = (i: number, field: 'key' | 'value', val: string) => {
+    setEnvEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
     setEnvDirty(true);
   };
 
-  const handleToggleHidden = (index: number) => {
-    setEnvEntries((prev) => prev.map((e, i) => i === index ? { ...e, hidden: !e.hidden } : e));
+  const handleToggleHidden = (i: number) => {
+    setEnvEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, hidden: !e.hidden } : e));
   };
 
-  const handleDeleteEnvRow = (index: number) => {
-    setEnvEntries((prev) => prev.filter((_, i) => i !== index));
+  const handleDeleteEnvRow = (i: number) => {
+    setEnvEntries((prev) => prev.filter((_, idx) => idx !== i));
     setEnvDirty(true);
   };
 
@@ -198,12 +165,10 @@ export default function Dashboard() {
   const handleRestart = () => {
     restartBot.mutate(undefined, {
       onSuccess: () => {
-        toast.success('Restart triggered');
+        toast.success('Restarting bot…');
         queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
       },
-      onError: (err: any) => {
-        toast.error(`Restart failed: ${err?.data?.error || err?.error || 'Unknown error'}`);
-      },
+      onError: (err: any) => toast.error(`Restart failed: ${err?.data?.error || 'Unknown error'}`),
     });
   };
 
@@ -213,18 +178,35 @@ export default function Dashboard() {
         toast.success('Bot stopped');
         queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
       },
-      onError: (err: any) => {
-        toast.error(`Stop failed: ${err?.data?.error || err?.error || 'Unknown error'}`);
-      },
+      onError: (err: any) => toast.error(`Stop failed: ${err?.data?.error || 'Unknown error'}`),
     });
   };
 
+  const handleRemoveBot = async () => {
+    if (!confirm('Remove this bot? This stops the process and deletes the uploaded files. You can deploy a new bot afterwards.')) return;
+    setRemovingBot(true);
+    try {
+      const r = await fetch(`${BASE}/api/bots`, { method: 'DELETE', credentials: 'include' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as any;
+        throw new Error(d?.error || 'Failed to remove bot');
+      }
+      toast.success('Bot removed');
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to remove bot');
+    } finally {
+      setRemovingBot(false);
+    }
+  };
+
+  // ─── Loading ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-background">
-        <div className="flex items-center gap-3 font-mono text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span className="animate-pulse tracking-widest">INITIALIZING SESSION...</span>
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#0b0b0f]">
+        <div className="flex items-center gap-3 font-mono text-sm text-white/30">
+          <Loader2 className="h-4 w-4 animate-spin text-[#5c6cf5]" />
+          <span className="animate-pulse tracking-widest">Initializing session…</span>
         </div>
       </div>
     );
@@ -233,23 +215,19 @@ export default function Dashboard() {
   if (!session) return null;
 
   const { hostedBot } = session;
-  const statusMeta = hostedBot ? getStatusMeta(hostedBot.status) : null;
-  const isProcessing =
-    hostedBot?.status === 'installing' ||
-    hostedBot?.status === 'starting' ||
-    hostedBot?.status === 'connecting';
+  const isProcessing = hostedBot?.status === 'installing' || hostedBot?.status === 'starting' || hostedBot?.status === 'connecting';
+  const isBusy = restartBot.isPending || stopBot.isPending || isProcessing || removingBot;
 
+  const expiryStr = (() => {
+    try {
+      const d = new Date(session.expiresAt as unknown as string);
+      return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true });
+    } catch { return '—'; }
+  })();
+
+  // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="relative min-h-[100dvh] w-full overflow-hidden bg-background">
-      {/* Grid background */}
-      <div
-        className="absolute inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage: `linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }}
-      />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,hsl(var(--primary)/0.06)_0%,transparent_70%)]" />
+    <div className="min-h-screen w-full bg-[#0b0b0f] text-[#c8c8d8]">
 
       {/* Modal */}
       {showCreateModal && (
@@ -262,243 +240,194 @@ export default function Dashboard() {
         />
       )}
 
-      <div className="relative p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-          <div className="flex items-center gap-3">
-            <div
-              className="h-10 w-10 rounded-xl flex items-center justify-center border border-primary/30 bg-primary/5"
-              style={{ boxShadow: '0 0 16px hsl(var(--primary)/0.2)' }}
-            >
-              <Zap className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-mono font-bold tracking-widest text-foreground">LUMORA</h1>
-              <p className="text-xs font-mono text-muted-foreground">
-                <span className="text-primary/80">@{session.ownerUsername}</span>
-                <span className="mx-1 opacity-30">•</span>
-                <span>TICKET-{session.ticketId}</span>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/60 bg-card/50 text-xs font-mono text-muted-foreground">
-              <Clock className="h-3.5 w-3.5 text-primary/60" />
-              <span>EXPIRES</span>
-              <span className="text-foreground font-semibold">
-                {(() => { try { const d = new Date(session.expiresAt as unknown as string); return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true }); } catch { return '—'; } })()}
-              </span>
-            </div>
-          </div>
-        </header>
+      {/* ─── Top bar ──────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-20 flex items-center justify-between h-13 px-6 border-b border-white/[0.06] bg-[#0b0b0f]/95 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <Zap className="h-4 w-4 text-[#5c6cf5]" />
+          <span className="font-mono font-bold text-sm tracking-[0.18em] text-white">LUMORA</span>
+          <span className="text-white/15 mx-1">·</span>
+          <span className="text-xs font-mono text-white/35">@{session.ownerUsername}</span>
+        </div>
+        <div className="flex items-center gap-4 text-xs font-mono text-white/30">
+          <span>TICKET-{session.ticketId}</span>
+          <span className="h-3.5 w-px bg-white/[0.08]" />
+          <span className="flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            Expires {expiryStr}
+          </span>
+        </div>
+      </header>
 
-        {/* Your Projects */}
-        <div className="rounded-xl border border-border/60 bg-card/30 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-primary/70" />
-              <span className="font-mono text-xs font-bold tracking-widest text-foreground">YOUR PROJECTS</span>
-            </div>
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              size="sm"
-              className="h-8 font-mono text-[10px] tracking-widest bg-primary/90 hover:bg-primary text-primary-foreground border-0"
-              style={{ boxShadow: '0 0 14px hsl(var(--primary)/0.25)' }}
-            >
-              <Plus className="h-3 w-3 mr-1.5" />
-              DEPLOY BOT
-            </Button>
-          </div>
+      {/* ─── Main content ─────────────────────────────────────────────────── */}
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-5">
 
-          {hostedBot ? (
-            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg border border-border/50 bg-background/60 flex items-center justify-center">
-                  <Activity className="h-4 w-4 text-primary/60" />
+        {/* Bot panel */}
+        {hostedBot && hostedBot.fileName ? (
+          <div className="rounded-xl border border-white/[0.07] bg-[#111116]">
+            {/* Bot header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-4">
+                <div className="h-9 w-9 rounded-lg border border-white/[0.07] bg-white/[0.03] flex items-center justify-center shrink-0">
+                  <Activity className="h-4 w-4 text-white/30" />
                 </div>
                 <div>
-                  <p className="text-sm font-mono font-semibold text-foreground">{hostedBot.fileName}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground/60">
+                  <div className="font-mono font-semibold text-sm text-white/85">{hostedBot.fileName}</div>
+                  <div className="text-[11px] text-white/30 mt-0.5">
                     {hostedBot.lastStartedAt
                       ? `Started ${formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true })}`
-                      : 'Not yet started'}
-                  </p>
+                      : 'Not started yet'}
+                  </div>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className={`font-mono text-[10px] px-2.5 py-0.5 flex items-center gap-1.5 ${statusMeta?.color}`}
-                style={{ boxShadow: statusMeta?.glow }}
-              >
-                {statusMeta?.icon}
-                {statusMeta?.label}
-              </Badge>
+              <StatusBadge status={hostedBot.status} />
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg border border-dashed border-border/40">
-              <Activity className="h-6 w-6 text-muted-foreground/30 mb-2" />
-              <p className="text-xs font-mono text-muted-foreground/50 tracking-wider">NO BOT DEPLOYED</p>
-              <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Click "Deploy Bot" to get started</p>
-            </div>
-          )}
-        </div>
 
+            {/* Stats */}
+            <div className="grid grid-cols-3 divide-x divide-white/[0.05] border-b border-white/[0.05]">
+              {[
+                { label: 'Restarts', value: String(hostedBot.restartCount) },
+                { label: 'Started', value: hostedBot.lastStartedAt ? formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true }) : '—' },
+                { label: 'Command', value: hostedBot.startCommand || '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="px-6 py-4">
+                  <div className="text-[10px] font-mono text-white/25 tracking-wider mb-1">{label.toUpperCase()}</div>
+                  <div className="font-mono text-sm text-white/70 truncate" title={value}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Processing indicator */}
+            {isProcessing && (
+              <div className="px-6 py-3 border-b border-white/[0.05] flex items-center gap-3 bg-blue-500/[0.04]">
+                <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+                <span className="text-xs font-mono text-blue-400">
+                  {hostedBot.status === 'installing' ? 'Installing dependencies…' : hostedBot.status === 'starting' ? 'Starting bot…' : 'Connecting…'}
+                </span>
+                <span className="text-xs text-white/25 font-mono">This may take a minute</span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="px-6 py-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleRestart}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-white/[0.09] text-xs font-mono text-white/50 hover:text-white/80 hover:border-white/[0.15] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <RotateCw className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-spin' : ''}`} />
+                {restartBot.isPending ? 'Restarting…' : 'Restart'}
+              </button>
+              <button
+                onClick={handleStop}
+                disabled={isBusy || hostedBot.status === 'stopped'}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-white/[0.09] text-xs font-mono text-white/50 hover:text-white/80 hover:border-white/[0.15] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <PowerOff className="h-3.5 w-3.5" />
+                {stopBot.isPending ? 'Stopping…' : 'Stop'}
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-white/[0.09] text-xs font-mono text-white/50 hover:text-white/80 hover:border-white/[0.15] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Replace Bot
+              </button>
+              <button
+                onClick={handleRemoveBot}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-red-500/20 text-xs font-mono text-red-400/60 hover:text-red-400 hover:border-red-500/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ml-auto"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {removingBot ? 'Removing…' : 'Remove Bot'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* No bot state */
+          <div
+            className="rounded-xl border-2 border-dashed border-white/[0.07] hover:border-[#5c6cf5]/30 transition-colors p-12 flex flex-col items-center justify-center text-center cursor-pointer"
+            onClick={() => setShowCreateModal(true)}
+          >
+            <div className="h-12 w-12 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-center mb-4">
+              <Plus className="h-5 w-5 text-white/20" />
+            </div>
+            <h3 className="font-mono font-semibold text-sm text-white/50 mb-1">No bot deployed</h3>
+            <p className="text-xs text-white/25 font-mono">Click to deploy your first bot — ZIP upload or GitHub import</p>
+          </div>
+        )}
+
+        {/* ─── Tabs ───────────────────────────────────────────────────────── */}
         <Tabs defaultValue="overview" className="space-y-5">
-          <TabsList className="font-mono text-xs tracking-widest bg-background/60 border border-border/50 h-9">
-            <TabsTrigger value="overview" className="text-[10px] tracking-widest px-4 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
+          <TabsList className="h-9 bg-white/[0.03] border border-white/[0.07] gap-0.5 p-1">
+            <TabsTrigger
+              value="overview"
+              className="text-[11px] font-mono tracking-wider h-7 px-4 text-white/35 data-[state=active]:bg-white/[0.07] data-[state=active]:text-white/80 data-[state=active]:shadow-none rounded"
+            >
               OVERVIEW
             </TabsTrigger>
-            <TabsTrigger value="files" className="text-[10px] tracking-widest px-4 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none flex items-center gap-1.5">
-              <Files className="h-3 w-3" />
-              FILES
+            <TabsTrigger
+              value="files"
+              className="text-[11px] font-mono tracking-wider h-7 px-4 text-white/35 data-[state=active]:bg-white/[0.07] data-[state=active]:text-white/80 data-[state=active]:shadow-none rounded flex items-center gap-1.5"
+            >
+              <Files className="h-3 w-3" /> FILES
+            </TabsTrigger>
+            <TabsTrigger
+              value="secrets"
+              className="text-[11px] font-mono tracking-wider h-7 px-4 text-white/35 data-[state=active]:bg-white/[0.07] data-[state=active]:text-white/80 data-[state=active]:shadow-none rounded flex items-center gap-1.5"
+            >
+              <Key className="h-3 w-3" /> SECRETS
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="files" className="mt-0">
-            <FileManager hasBot={!!hostedBot} />
-          </TabsContent>
+          {/* ── Overview ── */}
+          <TabsContent value="overview" className="mt-0 space-y-4">
 
-          <TabsContent value="overview" className="mt-0">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Main panel */}
-          <div className="lg:col-span-2 space-y-5">
-
-            {/* Bot Status Card */}
-            <div
-              className="rounded-xl border bg-card/50 backdrop-blur-sm overflow-hidden"
-              style={{
-                borderColor: hostedBot ? (hostedBot.status === 'running' ? 'rgba(52,211,153,0.2)' : hostedBot.status === 'crashed' || hostedBot.status === 'error' ? 'rgba(248,113,113,0.2)' : 'rgba(96,165,250,0.2)') : 'hsl(var(--border))',
-                boxShadow: hostedBot?.status === 'running' ? '0 0 30px rgba(52,211,153,0.06)' : '0 4px 24px rgba(0,0,0,0.3)',
-              }}
-            >
-              <div className="p-5">
-                {hostedBot ? (
-                  <>
-                    <div className="flex items-start justify-between mb-5">
-                      <div>
-                        <h2 className="font-mono font-bold text-base text-foreground">{hostedBot.fileName}</h2>
-                        <p className="text-xs font-mono text-muted-foreground mt-0.5">Active Deployment</p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={`font-mono text-xs px-3 py-1 flex items-center gap-2 ${statusMeta?.color}`}
-                        style={{ boxShadow: statusMeta?.glow }}
-                      >
-                        {statusMeta?.icon}
-                        {statusMeta?.label}
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3 mb-5">
-                      {[
-                        { label: 'RESTARTS', value: hostedBot.restartCount },
-                        {
-                          label: 'STARTED',
-                          value: hostedBot.lastStartedAt
-                            ? formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true })
-                            : '—',
-                        },
-                        { label: 'COMMAND', value: hostedBot.startCommand || '—' },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="rounded-lg bg-background/60 border border-border/40 p-3">
-                          <div className="text-[10px] font-mono text-muted-foreground mb-1 tracking-wider">{label}</div>
-                          <div className="font-mono text-sm text-foreground truncate" title={String(value)}>{String(value)}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleStop}
-                        disabled={stopBot.isPending || restartBot.isPending || isProcessing || hostedBot.status === 'stopped'}
-                        className="flex-1 font-mono text-xs tracking-widest h-10 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-300"
-                        variant="outline"
-                      >
-                        {stopBot.isPending
-                          ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                          : <PowerOff className="w-3.5 h-3.5 mr-2" />}
-                        {stopBot.isPending ? 'STOPPING...' : 'POWER OFF'}
-                      </Button>
-                      <Button
-                        onClick={handleRestart}
-                        disabled={restartBot.isPending || stopBot.isPending || isProcessing}
-                        className="flex-1 font-mono text-xs tracking-widest h-10"
-                        variant="outline"
-                      >
-                        <RotateCw className={`w-3.5 h-3.5 mr-2 ${restartBot.isPending ? 'animate-spin' : ''}`} />
-                        {restartBot.isPending ? 'RESTARTING...' : 'RESTART BOT'}
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-14 text-center">
-                    <div className="h-14 w-14 rounded-2xl border border-dashed border-border/60 flex items-center justify-center mb-4 opacity-40">
-                      <Activity className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <h3 className="font-mono text-sm font-semibold text-muted-foreground tracking-widest mb-2">
-                      NO BOT DEPLOYED
-                    </h3>
-                    <p className="text-xs font-mono text-muted-foreground/60 max-w-xs">
-                      Add your secrets below, then upload your bot's .zip file to get started.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* AI Repair Status */}
+            {/* AI repair notice */}
             {hostedBot && (hostedBot as any).repairAttempts > 0 && (hostedBot.status === 'crashed' || hostedBot.status === 'error') && (
-              <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4"
-                style={{ boxShadow: '0 0 20px rgba(139,92,246,0.06)' }}
-              >
+              <div className="rounded-xl border border-white/[0.07] bg-[#111116] p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-4 w-4 text-violet-400" />
-                  <span className="font-mono text-xs text-violet-400 font-bold tracking-wider">AI AUTO-REPAIR</span>
-                  <span className="ml-auto font-mono text-[10px] text-violet-400/60 border border-violet-500/20 rounded px-1.5 py-0.5">
+                  <Zap className="h-3.5 w-3.5 text-[#5c6cf5]" />
+                  <span className="font-mono text-xs text-white/60 font-semibold tracking-wider">AI AUTO-REPAIR</span>
+                  <span className="ml-auto font-mono text-[10px] text-white/30 border border-white/[0.07] rounded px-1.5 py-0.5">
                     {(hostedBot as any).repairAttempts}/3 attempts
                   </span>
                 </div>
-                <p className="text-[10px] font-mono text-violet-200/60 leading-relaxed">
-                  Lumora's AI repair system automatically attempted to fix your bot. Review the crash logs below, then check your secrets and try re-uploading.
+                <p className="text-xs text-white/40 leading-relaxed font-mono">
+                  Lumora's AI repair system attempted to fix your bot automatically. Check the crash logs, verify your secrets, then re-upload if needed.
                 </p>
               </div>
             )}
 
-            {/* AI Diagnostics */}
+            {/* AI diagnostic */}
             {hostedBot?.aiExplanation && (
-              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4"
-                style={{ boxShadow: '0 0 20px rgba(99,102,241,0.07)' }}
-              >
+              <div className="rounded-xl border border-white/[0.07] bg-[#111116] p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Terminal className="h-4 w-4 text-indigo-400" />
-                  <span className="font-mono text-xs text-indigo-400 font-bold tracking-wider">AI DIAGNOSTIC</span>
+                  <Terminal className="h-3.5 w-3.5 text-white/35" />
+                  <span className="font-mono text-xs text-white/50 font-semibold tracking-wider">AI DIAGNOSTIC</span>
                 </div>
-                <p className="text-xs text-indigo-100/70 leading-relaxed border-l-2 border-indigo-500/40 pl-3 font-mono italic">
+                <p className="text-xs text-white/50 leading-relaxed border-l-2 border-white/[0.08] pl-3 font-mono">
                   {hostedBot.aiExplanation}
                 </p>
               </div>
             )}
 
-            {/* Error Logs */}
+            {/* Crash logs */}
             {hostedBot?.errorMessage && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/5 overflow-hidden">
+              <div className="rounded-xl border border-red-500/15 bg-red-500/[0.04] overflow-hidden">
                 <button
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-red-500/10 transition-colors"
+                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-red-500/[0.04] transition-colors"
                   onClick={() => setShowLogs(!showLogs)}
                 >
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                    <span className="font-mono text-xs text-red-400 font-bold tracking-wider">CRASH LOGS</span>
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-400/60" />
+                    <span className="font-mono text-xs text-red-400/80 font-semibold tracking-wider">CRASH LOG</span>
                   </div>
-                  {showLogs ? (
-                    <ChevronUp className="h-4 w-4 text-red-400/60" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-red-400/60" />
-                  )}
+                  {showLogs ? <ChevronUp className="h-4 w-4 text-red-400/40" /> : <ChevronDown className="h-4 w-4 text-red-400/40" />}
                 </button>
                 {showLogs && (
-                  <div className="px-4 pb-4">
-                    <pre className="text-[10px] font-mono text-red-300/70 bg-background/60 rounded-lg p-3 overflow-x-auto max-h-48 border border-red-500/10 whitespace-pre-wrap">
+                  <div className="px-5 pb-4">
+                    <pre className="text-[10px] font-mono text-red-300/60 bg-[#0e0e13] rounded-lg p-3 overflow-x-auto max-h-52 border border-red-500/10 whitespace-pre-wrap">
                       {hostedBot.errorMessage}
                     </pre>
                   </div>
@@ -506,23 +435,54 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Secrets / Environment Variables Panel */}
-            <div className="rounded-xl border border-violet-500/20 bg-card/50 backdrop-blur-sm overflow-hidden"
-              style={{ boxShadow: '0 0 24px rgba(139,92,246,0.05)' }}
-            >
-              <div className="px-5 py-4 border-b border-violet-500/15 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="h-4 w-4 text-violet-400" />
-                  <span className="font-mono text-xs text-violet-400 font-bold tracking-wider">SECRETS & ENV VARS</span>
+            {/* Empty state for overview */}
+            {!hostedBot?.errorMessage && !hostedBot?.aiExplanation && !(hostedBot && (hostedBot as any).repairAttempts > 0) && (
+              <div className="rounded-xl border border-white/[0.06] bg-[#111116] px-6 py-10 flex flex-col items-center text-center">
+                <Activity className="h-8 w-8 text-white/10 mb-3" />
+                <p className="font-mono text-xs text-white/25 tracking-wider">
+                  {hostedBot ? 'Bot is running — no issues to report.' : 'No bot deployed yet. Deploy one above to get started.'}
+                </p>
+              </div>
+            )}
+
+            {/* Plan info */}
+            <div className="rounded-xl border border-white/[0.06] bg-[#111116] px-5 py-4">
+              <p className="font-mono text-[10px] text-white/25 tracking-widest mb-3">PLAN</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { k: 'Runtime', v: 'Python · Node.js · Java' },
+                  { k: 'Network', v: 'Isolated' },
+                  { k: 'Storage', v: 'Persistent' },
+                  { k: 'Duration', v: `${session.hostingDurationDays}d` },
+                ].map(({ k, v }) => (
+                  <div key={k}>
+                    <div className="text-[10px] font-mono text-white/25 mb-0.5">{k}</div>
+                    <div className="text-xs font-mono text-white/55">{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ── Files ── */}
+          <TabsContent value="files" className="mt-0">
+            <FileManager hasBot={!!hostedBot} />
+          </TabsContent>
+
+          {/* ── Secrets ── */}
+          <TabsContent value="secrets" className="mt-0">
+            <div className="rounded-xl border border-white/[0.07] bg-[#111116] overflow-hidden">
+              <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                <div>
+                  <div className="font-mono text-xs text-white/60 font-semibold tracking-wider">ENVIRONMENT SECRETS</div>
+                  <div className="text-[11px] text-white/25 font-mono mt-0.5">Injected into your bot's process at startup</div>
                 </div>
-                {envDirty && (
-                  <span className="text-[10px] font-mono text-yellow-400/80 tracking-wider">● UNSAVED</span>
-                )}
+                {envDirty && <span className="text-[10px] font-mono text-yellow-400/70">Unsaved changes</span>}
               </div>
 
-              <div className="p-5 space-y-3">
-                <p className="text-[10px] font-mono text-muted-foreground/60 leading-relaxed">
-                  Add your bot's secrets here (e.g. <span className="text-violet-300/80">DISCORD_TOKEN</span>, <span className="text-violet-300/80">MONGODB_URI</span>). They are injected into the process when your bot starts. Save first, then restart.
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-white/35 font-mono leading-relaxed">
+                  Add keys like <span className="text-white/55">DISCORD_TOKEN</span> or <span className="text-white/55">MONGODB_URI</span>. Save changes, then restart your bot to apply them.
                 </p>
 
                 {envEntries.length > 0 && (
@@ -534,7 +494,7 @@ export default function Dashboard() {
                           placeholder="KEY"
                           value={entry.key}
                           onChange={(e) => handleEnvChange(i, 'key', e.target.value)}
-                          className="flex-[0_0_38%] bg-background/60 border border-border/50 rounded-lg px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-colors uppercase"
+                          className="flex-[0_0_36%] bg-[#0e0e13] border border-white/[0.08] rounded-md px-3 py-2 font-mono text-xs text-white/70 placeholder:text-white/20 focus:outline-none focus:border-[#5c6cf5]/40 transition-colors uppercase"
                           spellCheck={false}
                         />
                         <div className="flex-1 relative">
@@ -543,13 +503,13 @@ export default function Dashboard() {
                             placeholder="value"
                             value={entry.value}
                             onChange={(e) => handleEnvChange(i, 'value', e.target.value)}
-                            className="w-full bg-background/60 border border-border/50 rounded-lg px-3 py-2 pr-8 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-colors"
+                            className="w-full bg-[#0e0e13] border border-white/[0.08] rounded-md px-3 py-2 pr-8 font-mono text-xs text-white/70 placeholder:text-white/20 focus:outline-none focus:border-[#5c6cf5]/40 transition-colors"
                             spellCheck={false}
                           />
                           <button
                             type="button"
                             onClick={() => handleToggleHidden(i)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50 transition-colors"
                           >
                             {entry.hidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                           </button>
@@ -557,7 +517,7 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => handleDeleteEnvRow(i)}
-                          className="text-muted-foreground/30 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-white/15 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -567,104 +527,35 @@ export default function Dashboard() {
                 )}
 
                 {envEntries.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border/40 p-4 text-center">
-                    <p className="text-[10px] font-mono text-muted-foreground/50">No secrets added yet. Click below to add one.</p>
+                  <div className="rounded-lg border border-dashed border-white/[0.07] p-6 text-center">
+                    <p className="text-[11px] font-mono text-white/25">No secrets added yet.</p>
                   </div>
                 )}
 
                 <div className="flex gap-2 pt-1">
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
                     onClick={handleAddEnvRow}
-                    className="font-mono text-[10px] tracking-widest h-8 border-border/50 hover:border-violet-500/40 hover:text-violet-300"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-white/[0.09] text-xs font-mono text-white/40 hover:text-white/70 hover:border-white/[0.15] transition-colors"
                   >
-                    <Plus className="h-3 w-3 mr-1" />
-                    ADD SECRET
-                  </Button>
-                  <Button
+                    <Plus className="h-3 w-3" />
+                    Add Secret
+                  </button>
+                  <button
                     type="button"
-                    size="sm"
                     onClick={handleSaveEnv}
                     disabled={envSaving || !envDirty}
-                    className="font-mono text-[10px] tracking-widest h-8 bg-violet-600/80 hover:bg-violet-600 text-white border-0"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-[#5c6cf5]/30 text-xs font-mono text-[#5c6cf5]/80 hover:text-[#5c6cf5] hover:border-[#5c6cf5]/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    {envSaving ? (
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    ) : (
-                      <Save className="h-3 w-3 mr-1" />
-                    )}
-                    {envSaving ? 'SAVING...' : 'SAVE SECRETS'}
-                  </Button>
+                    {envSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                    {envSaving ? 'Saving…' : 'Save Secrets'}
+                  </button>
                 </div>
               </div>
             </div>
-
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-5">
-            {/* Deploy card */}
-            <div className="rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-border/40">
-                <span className="font-mono text-xs text-muted-foreground tracking-widest">DEPLOYMENT</span>
-              </div>
-              <div className="p-4 space-y-3">
-                {isProcessing && (
-                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-3">
-                    <Loader2 className="h-4 w-4 text-blue-400 animate-spin shrink-0" />
-                    <div>
-                      <p className="text-xs font-mono font-bold text-blue-400 tracking-wider">
-                        {hostedBot?.status === 'installing' ? 'INSTALLING DEPS...' : hostedBot?.status === 'starting' ? 'STARTING BOT...' : 'CONNECTING...'}
-                      </p>
-                      <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">Please wait, this may take a minute</p>
-                    </div>
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="w-full rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/3 p-6 flex flex-col items-center gap-2 transition-all text-center"
-                >
-                  <div className="h-10 w-10 rounded-full border border-border/50 bg-background/60 flex items-center justify-center">
-                    <Plus className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <p className="font-mono text-xs font-bold tracking-wider text-foreground">DEPLOY NEW BOT</p>
-                  <p className="text-[10px] font-mono text-muted-foreground/60">ZIP upload or GitHub import</p>
-                </button>
-                <div className="space-y-1.5">
-                  {['Add secrets before deploying', 'Python · Node.js · Java supported', 'Max 100MB zip'].map((r, i) => (
-                    <div key={r} className="flex items-center gap-2">
-                      <span className={`text-[10px] ${i === 0 ? 'text-violet-400/60' : 'text-primary/40'}`}>▸</span>
-                      <span className={`text-[10px] font-mono ${i === 0 ? 'text-violet-300/60' : 'text-muted-foreground/50'}`}>{r}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* System Info */}
-            <div className="rounded-xl border border-border/60 bg-card/50 p-4">
-              <p className="font-mono text-[10px] text-muted-foreground tracking-widest mb-3">SYSTEM</p>
-              <div className="space-y-2">
-                {[
-                  { k: 'RUNTIME', v: 'Node.js / Python', color: '' },
-                  { k: 'NETWORK', v: 'ISOLATED', color: 'text-emerald-400' },
-                  { k: 'STORAGE', v: 'EPHEMERAL', color: 'text-yellow-400' },
-                  { k: 'HOSTING', v: `${session.hostingDurationDays}d plan`, color: 'text-primary/80' },
-                ].map(({ k, v, color }) => (
-                  <div key={k} className="flex justify-between items-center">
-                    <span className="text-[10px] font-mono text-muted-foreground">{k}</span>
-                    <span className={`text-[10px] font-mono font-semibold ${color || 'text-foreground'}`}>{v}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
   );
 }

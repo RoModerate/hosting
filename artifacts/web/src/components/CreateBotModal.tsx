@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
-import { Github, UploadCloud, Loader2, XCircle, CheckCircle2, X, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Github, UploadCloud, Loader2, XCircle, CheckCircle2, X, ChevronRight, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
@@ -8,33 +7,21 @@ const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 const LANGUAGES = [
   {
     id: 'nodejs',
-    emoji: '🟩',
     label: 'Node.js',
-    desc: 'discord.js, Eris, etc.',
-    color: 'hover:border-emerald-500/50 hover:bg-emerald-500/8 data-[sel=true]:border-emerald-500/50 data-[sel=true]:bg-emerald-500/10',
-    accent: 'text-emerald-400',
-    badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+    note: 'discord.js · Eris · Sapphire',
     requirement: 'package.json with a "start" script',
   },
   {
     id: 'python',
-    emoji: '🐍',
     label: 'Python',
-    desc: 'discord.py, py-cord, etc.',
-    color: 'hover:border-blue-500/50 hover:bg-blue-500/8 data-[sel=true]:border-blue-500/50 data-[sel=true]:bg-blue-500/10',
-    accent: 'text-blue-400',
-    badge: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-    requirement: 'main.py or requirements.txt',
+    note: 'discord.py · py-cord · hikari',
+    requirement: 'main.py or requirements.txt at root',
   },
   {
     id: 'java',
-    emoji: '☕',
     label: 'Java',
-    desc: 'JDA, Javacord, etc.',
-    color: 'hover:border-orange-500/50 hover:bg-orange-500/8 data-[sel=true]:border-orange-500/50 data-[sel=true]:bg-orange-500/10',
-    accent: 'text-orange-400',
-    badge: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
-    requirement: 'pom.xml or build.gradle',
+    note: 'JDA · Javacord · D4J',
+    requirement: 'pom.xml or build.gradle at root',
   },
 ];
 
@@ -58,22 +45,12 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const lang = LANGUAGES.find((l) => l.id === selectedLang);
-
   const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
   const doZipUpload = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-      setError('Only .zip files are supported.');
-      return;
-    }
-    if (file.size === 0) {
-      setError('The selected file is empty.');
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError('File is too large. Max size is 100MB.');
-      return;
-    }
+    if (!file.name.toLowerCase().endsWith('.zip')) { setError('Only .zip files are accepted.'); return; }
+    if (file.size === 0) { setError('The selected file is empty.'); return; }
+    if (file.size > MAX_UPLOAD_BYTES) { setError('File exceeds the 100 MB limit.'); return; }
 
     setError(null);
     setUploadProgress(0);
@@ -92,16 +69,12 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
       if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
     });
 
-    const finish = () => {
-      setIsUploading(false);
-      setUploadProgress(0);
-    };
+    const finish = () => { setIsUploading(false); setUploadProgress(0); };
 
     xhr.addEventListener('load', () => {
       if (xhr.status === 202) {
-        setUploadProgress(100);
         finish();
-        toast.success('Bot deployed! Monitoring status in dashboard.');
+        toast.success('Bot deployed! Watch the status panel.');
         onDeployed();
         onClose();
         return;
@@ -111,7 +84,7 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
         const d = JSON.parse(xhr.responseText);
         setError(d?.error || 'Upload failed.');
       } catch {
-        setError(xhr.status === 413 ? 'File too large (max 100MB).' : 'Upload failed.');
+        setError(xhr.status === 413 ? 'File too large (max 100 MB).' : 'Upload failed.');
       }
     });
     xhr.addEventListener('error', () => { finish(); setError('Upload failed — connection interrupted.'); });
@@ -125,10 +98,8 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
     const url = githubUrl.trim();
     if (!url) { setError('Please enter a GitHub repository URL.'); return; }
     if (!url.startsWith('https://github.com/') && !url.startsWith('http://github.com/')) {
-      setError('Please enter a valid GitHub URL (https://github.com/...).');
-      return;
+      setError('Enter a valid GitHub URL (https://github.com/user/repo).'); return;
     }
-
     setError(null);
     setIsUploading(true);
     try {
@@ -139,11 +110,8 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
         body: JSON.stringify({ repoUrl: url, language: selectedLang }),
       });
       const data = await res.json() as any;
-      if (!res.ok) {
-        setError(data?.error || 'GitHub deploy failed.');
-        return;
-      }
-      toast.success('Bot deployed from GitHub! Monitoring status in dashboard.');
+      if (!res.ok) { setError(data?.error || 'GitHub deploy failed.'); return; }
+      toast.success('Deploying from GitHub — watch the status panel.');
       onDeployed();
       onClose();
     } catch {
@@ -155,92 +123,94 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div
-        className="relative w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, rgba(12,11,22,0.98) 0%, rgba(8,7,18,0.99) 100%)', boxShadow: '0 0 0 1px rgba(139,92,246,0.12), 0 32px 80px rgba(0,0,0,0.7)' }}
-      >
+      <div className="relative w-full max-w-md rounded-xl border border-white/[0.08] bg-[#111116] overflow-hidden shadow-2xl">
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
             {step === 'upload' && (
               <button
                 onClick={() => { setStep('language'); setError(null); }}
-                className="text-white/30 hover:text-white/60 transition-colors text-xs font-mono"
+                className="text-white/25 hover:text-white/60 transition-colors"
               >
-                ← back
+                <ArrowLeft className="h-4 w-4" />
               </button>
             )}
             <div>
-              <h2 className="font-mono font-bold text-sm tracking-wider text-white">
-                {step === 'language' ? 'NEW BOT' : `DEPLOY · ${lang?.label.toUpperCase()}`}
+              <h2 className="font-mono font-bold text-sm text-white/85">
+                {step === 'language' ? 'Deploy Bot' : `Deploy · ${lang?.label}`}
               </h2>
-              <p className="text-[10px] font-mono text-white/30 mt-0.5">
+              <p className="text-[10px] font-mono text-white/25 mt-0.5">
                 {step === 'language' ? 'Step 1 of 2 — Select runtime' : 'Step 2 of 2 — Upload source'}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors">
+          <button onClick={onClose} className="text-white/25 hover:text-white/60 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="p-6">
-          {/* ── Step 1: Language selection ── */}
+
+          {/* ── Step 1: Language ── */}
           {step === 'language' && (
             <div className="space-y-4">
-              <p className="text-xs font-mono text-white/40">Choose the runtime your bot is built with.</p>
-              <div className="grid grid-cols-3 gap-3">
+              <p className="text-xs font-mono text-white/35">Choose the runtime your bot is built with.</p>
+
+              <div className="space-y-2">
                 {LANGUAGES.map((l) => (
                   <button
                     key={l.id}
-                    data-sel={selectedLang === l.id}
                     onClick={() => setSelectedLang(l.id)}
-                    className={`flex flex-col items-center gap-2 rounded-xl border border-white/8 bg-white/2 p-4 transition-all cursor-pointer ${l.color}`}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left ${
+                      selectedLang === l.id
+                        ? 'border-[#5c6cf5]/40 bg-[#5c6cf5]/[0.07]'
+                        : 'border-white/[0.07] hover:border-white/[0.12] hover:bg-white/[0.02]'
+                    }`}
                   >
-                    <span className="text-2xl">{l.emoji}</span>
-                    <span className={`text-xs font-mono font-bold ${selectedLang === l.id ? l.accent : 'text-white/60'}`}>{l.label}</span>
-                    <span className="text-[9px] font-mono text-white/30 text-center leading-tight">{l.desc}</span>
-                    {selectedLang === l.id && (
-                      <CheckCircle2 className={`h-3.5 w-3.5 ${l.accent}`} />
-                    )}
+                    <div>
+                      <div className={`text-sm font-mono font-semibold ${selectedLang === l.id ? 'text-white/85' : 'text-white/55'}`}>
+                        {l.label}
+                      </div>
+                      <div className="text-[10px] font-mono text-white/25 mt-0.5">{l.note}</div>
+                    </div>
+                    {selectedLang === l.id && <CheckCircle2 className="h-4 w-4 text-[#5c6cf5]/80 shrink-0" />}
                   </button>
                 ))}
               </div>
 
               {selectedLang && (
-                <div className="rounded-lg border border-white/6 bg-white/2 px-4 py-3 flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-white/30">Requires:</span>
-                  <span className="text-[10px] font-mono text-white/60">{lang?.requirement}</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-white/[0.06] bg-white/[0.02]">
+                  <span className="text-[10px] font-mono text-white/25">Requires:</span>
+                  <span className="text-[10px] font-mono text-white/50">{lang?.requirement}</span>
                 </div>
               )}
 
-              <Button
+              <button
                 onClick={() => selectedLang && setStep('upload')}
                 disabled={!selectedLang}
-                className="w-full h-10 font-mono text-xs tracking-widest bg-violet-600 hover:bg-violet-500 disabled:opacity-30 text-white border-0"
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-md text-sm font-semibold bg-[#3d4df0] hover:bg-[#4b5af2] text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed font-mono"
               >
-                Continue
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
+                Continue <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           )}
 
           {/* ── Step 2: Upload ── */}
           {step === 'upload' && (
             <div className="space-y-4">
-              {/* Upload method toggle */}
-              <div className="flex rounded-xl border border-white/8 p-1 bg-white/2 gap-1">
+              {/* Method toggle */}
+              <div className="flex rounded-lg border border-white/[0.07] p-1 bg-white/[0.02] gap-1">
                 {(['zip', 'github'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => { setUploadMethod(m); setError(null); }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-mono font-semibold transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-xs font-mono font-semibold transition-all ${
                       uploadMethod === m
-                        ? 'bg-violet-600 text-white shadow-md'
-                        : 'text-white/40 hover:text-white/60'
+                        ? 'bg-white/[0.07] text-white/80'
+                        : 'text-white/30 hover:text-white/55'
                     }`}
                   >
                     {m === 'zip' ? <UploadCloud className="h-3.5 w-3.5" /> : <Github className="h-3.5 w-3.5" />}
@@ -249,16 +219,16 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
                 ))}
               </div>
 
-              {/* ZIP upload area */}
+              {/* ZIP drop area */}
               {uploadMethod === 'zip' && (
                 <div className="space-y-3">
                   <div
                     className={`relative border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
                       isDragging
-                        ? 'border-violet-500/60 bg-violet-500/6 scale-[1.01]'
+                        ? 'border-[#5c6cf5]/40 bg-[#5c6cf5]/[0.05]'
                         : isUploading
-                        ? 'border-blue-500/40 bg-blue-500/5 cursor-default'
-                        : 'border-white/10 hover:border-violet-500/40 hover:bg-violet-500/4'
+                        ? 'border-blue-500/30 bg-blue-500/[0.04] cursor-default'
+                        : 'border-white/[0.08] hover:border-white/[0.15]'
                     }`}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
@@ -282,103 +252,92 @@ export default function CreateBotModal({ onClose, onDeployed }: Props) {
                     />
                     {isUploading ? (
                       <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
+                        <Loader2 className="h-7 w-7 text-blue-400/70 animate-spin" />
                         <div>
-                          <p className="font-mono text-xs text-blue-400 font-bold tracking-wider">
-                            {uploadProgress < 100 ? `UPLOADING… ${uploadProgress}%` : 'PROCESSING...'}
+                          <p className="font-mono text-xs text-blue-400/70 font-semibold">
+                            {uploadProgress < 100 ? `Uploading ${uploadProgress}%` : 'Processing…'}
                           </p>
                           {uploadProgress > 0 && uploadProgress < 100 && (
-                            <div className="mt-2 mx-4 bg-blue-500/10 rounded-full h-1 overflow-hidden">
-                              <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                            <div className="mt-2 w-32 mx-auto bg-white/[0.06] rounded-full h-0.5 overflow-hidden">
+                              <div className="h-full bg-blue-400/60 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
                             </div>
                           )}
-                          <p className="text-[10px] font-mono text-white/30 mt-1.5">Do not close this window</p>
+                          <p className="text-[10px] font-mono text-white/20 mt-2">Don't close this window</p>
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
-                        <div className="h-12 w-12 rounded-full border border-white/10 bg-white/4 flex items-center justify-center">
-                          <UploadCloud className="h-6 w-6 text-white/40" />
-                        </div>
+                        <UploadCloud className="h-7 w-7 text-white/15" />
                         <div>
-                          <p className="font-mono text-sm font-bold text-white/70">Drop your ZIP here</p>
-                          <p className="text-[11px] font-mono text-white/30 mt-1">or click to browse · max 100MB</p>
+                          <p className="font-mono text-sm font-semibold text-white/50">Drop your ZIP here</p>
+                          <p className="text-[11px] font-mono text-white/25 mt-1">or click to browse · max 100 MB</p>
                         </div>
                       </div>
                     )}
                   </div>
-                  <ul className="space-y-1">
-                    {[
-                      lang?.requirement || 'Start script required',
-                      'Add bot secrets in dashboard before uploading',
-                      'Max 100MB zip',
-                    ].map((r) => (
-                      <li key={r} className="flex items-center gap-2">
-                        <span className="text-violet-400/50 text-[10px]">▸</span>
-                        <span className="text-[10px] font-mono text-white/35">{r}</span>
-                      </li>
+
+                  <div className="space-y-1">
+                    {[lang?.requirement || 'Start script required', 'Set secrets before deploying', 'Max 100 MB zip'].map((r) => (
+                      <div key={r} className="flex items-center gap-2">
+                        <span className="text-white/20 text-[10px]">·</span>
+                        <span className="text-[10px] font-mono text-white/30">{r}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
 
-              {/* GitHub import */}
+              {/* GitHub */}
               {uploadMethod === 'github' && (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-mono text-white/40 tracking-wider">REPOSITORY URL</label>
+                    <label className="text-[10px] font-mono text-white/30 tracking-wider">REPOSITORY URL</label>
                     <div className="relative">
-                      <Github className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                      <Github className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
                       <input
                         type="url"
                         value={githubUrl}
                         onChange={(e) => { setGithubUrl(e.target.value); setError(null); }}
                         placeholder="https://github.com/user/my-bot"
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-white/8 bg-white/3 font-mono text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-white/[0.08] bg-[#0e0e13] font-mono text-sm text-white/70 placeholder:text-white/20 focus:outline-none focus:border-[#5c6cf5]/40 transition-colors"
                         spellCheck={false}
                         autoComplete="off"
                       />
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-white/6 bg-white/2 px-4 py-3 space-y-1">
+                  <div className="space-y-1">
                     {[
-                      'Public repositories only (no auth token required)',
-                      'Default branch is cloned and zipped automatically',
+                      'Public repositories only',
+                      'Default branch is cloned automatically',
                       lang?.requirement || 'Runtime entry point must be present',
                     ].map((r) => (
                       <div key={r} className="flex items-center gap-2">
-                        <span className="text-violet-400/50 text-[10px]">▸</span>
-                        <span className="text-[10px] font-mono text-white/35">{r}</span>
+                        <span className="text-white/20 text-[10px]">·</span>
+                        <span className="text-[10px] font-mono text-white/30">{r}</span>
                       </div>
                     ))}
                   </div>
 
-                  <Button
+                  <button
                     onClick={doGithubDeploy}
                     disabled={isUploading || !githubUrl.trim()}
-                    className="w-full h-10 font-mono text-xs tracking-widest bg-violet-600 hover:bg-violet-500 disabled:opacity-30 text-white border-0"
+                    className="w-full flex items-center justify-center gap-2 h-10 rounded-md text-sm font-semibold bg-[#3d4df0] hover:bg-[#4b5af2] text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed font-mono"
                   >
                     {isUploading ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-                        CLONING REPO...
-                      </>
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Cloning…</>
                     ) : (
-                      <>
-                        <Github className="h-3.5 w-3.5 mr-2" />
-                        DEPLOY FROM GITHUB
-                      </>
+                      <><Github className="h-3.5 w-3.5" /> Deploy from GitHub</>
                     )}
-                  </Button>
+                  </button>
                 </div>
               )}
 
               {/* Error */}
               {error && (
-                <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 flex items-start gap-2">
-                  <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-xs font-mono text-red-300/80">{error}</p>
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg border border-red-500/15 bg-red-500/[0.05]">
+                  <XCircle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
+                  <p className="text-xs font-mono text-red-300/70">{error}</p>
                 </div>
               )}
             </div>

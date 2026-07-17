@@ -3,3 +3,4 @@ zipFile.zip filter=lfs diff=lfs merge=lfs -text
 artifacts/api-server/storage/uploads/1/Discord-Bot-Env.zip filter=lfs diff=lfs merge=lfs -text
 artifacts/api-server/storage/uploads/1/Discord-Bot-Token.zip filter=lfs diff=lfs merge=lfs -text
 artifacts/api-server/storage/uploads/1/Discord-Command-Hub.zip filter=lfs diff=lfs merge=lfs -text
+artifacts/api-server/storage/uploads/1/Discord-Command-Bot.zip filter=lfs diff=lfs merge=lfs -text

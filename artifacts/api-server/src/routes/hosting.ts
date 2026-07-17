@@ -398,4 +398,36 @@ router.post("/bots/restart", async (req, res) => {
   });
 });
 
+router.delete("/bots", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    return;
+  }
+
+  const ticketId = session.ticket.id;
+
+  // Stop the running process (ignore errors — may already be stopped)
+  await stopHostedBot(ticketId).catch(() => undefined);
+
+  // Delete uploaded files
+  const uploadDir = ticketUploadDir(ticketId);
+  await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => undefined);
+
+  // Reset the bot record so the portal shows "no bot deployed"
+  await updateHostedBot(ticketId, {
+    fileName: "",
+    extractPath: "",
+    status: "stopped",
+    startCommand: null,
+    errorMessage: null,
+    aiExplanation: null,
+  }).catch(() => undefined);
+
+  notifyTicketChannel(ticketId, "Bot removed via hosting portal.").catch(() => undefined);
+  res.json({ ok: true });
+});
+
 export default router;
+

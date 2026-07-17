@@ -217,22 +217,6 @@ importers:
         specifier: 3.1.0
         version: 3.1.0
 
-  artifacts/discord-bot:
-    dependencies:
-      discord.js:
-        specifier: ^14.14.1
-        version: 14.27.0
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 25.9.5
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.0
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-
   artifacts/mockup-sandbox:
     devDependencies:
       '@hookform/resolvers':
@@ -415,6 +399,22 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+
+  bots/discord-bot:
+    dependencies:
+      discord.js:
+        specifier: ^14.16.3
+        version: 14.27.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.5
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   lib/api-client-react:
     dependencies:
