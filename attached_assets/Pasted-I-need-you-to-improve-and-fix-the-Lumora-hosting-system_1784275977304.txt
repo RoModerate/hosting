@@ -1,0 +1,73 @@
+I need you to improve and fix the Lumora hosting system.
+
+First, fix Discord OAuth login. Add proper "Login with Discord" authentication using this redirect URI:
+
+https://f78f5592-0a9f-45a0-9a47-042997969d32-00-qpz911m9vo7s.worf.replit.dev/auth/discord/callback
+
+Use this Discord OAuth URL configuration:
+
+https://discord.com/oauth2/authorize?client_id=1378231778292142172&response_type=code&redirect_uri=https%3A%2F%2Ff78f5592-0a9f-45a0-9a47-042997969d32-00-qpz911m9vo7s.worf.replit.dev%2Fauth%2Fdiscord%2Fcallback&scope=identify+connections
+
+Make the login system properly show the user's Discord username, avatar, and account information after login. Add a proper logout button and session handling.
+
+Now fix the hosting system issues:
+
+The restart button is broken. Currently when users press restart, the bot enters a restart loop and keeps restarting without actually fixing or starting the bot. Create a proper restart system:
+- Stop the old process completely.
+- Clean up old processes.
+- Start the bot once.
+- Wait for startup confirmation.
+- Show the real status (Starting, Installing, Connecting, Online, Crashed).
+- Prevent infinite restart loops.
+- Add a cooldown so users cannot spam restart.
+
+The main hosting issue is that uploaded Discord bots keep crashing. Improve the deployment engine so it works like Replit Agent.
+
+The AI agent should have real debugging abilities:
+- Read crash logs automatically.
+- Identify the problem.
+- Modify bot files when needed.
+- Install missing dependencies automatically.
+- Fix package.json problems.
+- Detect npm, pnpm, yarn, and Python projects.
+- Fix workspace/monorepo issues.
+- Remove Replit-only dependencies like @workspace/* and workspace:* when deploying standalone bots.
+- Create a clean standalone bot environment.
+- Install all required packages.
+- Detect missing environment variables.
+- Ask users only when a secret is actually required.
+- Restart after applying fixes.
+- Verify the bot actually connects to Discord.
+
+The AI should not only explain errors. It should automatically do the work:
+1. Analyze error.
+2. Apply fix.
+3. Install dependencies.
+4. Restart bot.
+5. Check logs.
+6. Confirm the bot is online.
+
+Improve the Discord bot detection system:
+- Detect discord.js bots.
+- Detect discord.py bots.
+- Find the correct bot folder inside ZIP files.
+- Ignore unnecessary workspace files.
+- Automatically select the folder containing package.json or requirements.txt.
+- Validate the start command.
+- Add a start command if missing.
+
+Fix the current issue where the hosting says "Running" but the Discord bot is actually offline. Only show "Online" when:
+- Discord client ready event fires.
+- Bot username is received.
+- Connection is confirmed.
+
+Add better startup diagnostics so users can see:
+✓ ZIP extracted
+✓ Bot detected
+✓ Dependencies installed
+✓ Environment variables loaded
+✓ Starting bot
+✓ Connecting to Discord
+✓ Bot online
+
+The goal is to make Lumora hosting work automatically for normal Discord bots without users needing technical knowledge or needing me to manually fix every crash.
