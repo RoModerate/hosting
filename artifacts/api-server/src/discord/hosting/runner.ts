@@ -144,7 +144,7 @@ const DISCORD_ONLINE_PATTERNS: RegExp[] = [
   /successfully logged in/i,
   /connected to discord/i,
   /discord.*client.*ready/i,
-  /gateway.*connect/i,
+  /gateway.*\bconnected\b/i,   // "gateway connected" — avoid matching "connection failed"
 ];
 
 /** Patterns that indicate Discord login failed (process may still be running). */
@@ -464,6 +464,30 @@ function diagnoseBotCrash(
       "Make sure the bot has been invited to your server with the correct permission " +
       "scopes, and that it has the required channel/guild permissions for the " +
       "actions it tries to perform on startup.";
+  }
+
+  // ── Discord gateway HTTP 500 — temporary Discord-side server error ────────
+  // discord.js throws DiscordAPIError and logs the status + url fields.
+  if (
+    (text.includes("status: 500") || text.includes("status 500") || text.includes("httperror")) &&
+    (text.includes("discord.com") || text.includes("gateway/bot"))
+  ) {
+    return "Discord's gateway API returned a temporary server error (HTTP 500).\n\n" +
+      "This is Discord's fault, not your bot. The Lumora auto-restart system will " +
+      "retry the connection automatically.\n\n" +
+      "If retries keep failing, check https://discordstatus.com for any ongoing " +
+      "Discord outages. Once Discord recovers, restart your bot from this panel.";
+  }
+
+  // ── Discord rate-limited (HTTP 429) ───────────────────────────────────────
+  if (
+    (text.includes("status: 429") || text.includes("status 429") || text.includes("rate limit")) &&
+    (text.includes("discord") || text.includes("gateway"))
+  ) {
+    return "Discord rate-limited the connection attempt (HTTP 429).\n\n" +
+      "This usually happens when the bot is restarted too quickly in succession. " +
+      "Lumora will automatically retry with increasing delays. " +
+      "If you are restarting manually, wait a few minutes before trying again.";
   }
 
   // ── No token in secrets (no output match, but we can still diagnose) ──
@@ -1467,14 +1491,25 @@ function attachSupervision(
   child.once("exit", (code) => {
     clearRunningProcess(ticketId);
     const wasIntentional = consumeIntentionalStop(ticketId);
-
     const tailLog = tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS);
+
+    // Produce a human-friendly error — run the same crash diagnosis we use at
+    // startup. userVars aren't available here so token checks are skipped, but
+    // all output-pattern matches (Discord HTTP 500, invalid token text, etc.)
+    // still work.  Fall back to a clean generic message rather than leaking a
+    // raw stack trace in the error box (the full log is already visible above).
+    let errorMessage: string | null = null;
+    if (!wasIntentional) {
+      const diagnosis = diagnoseBotCrash(tailLog, {});
+      errorMessage = diagnosis ??
+        `The bot process exited unexpectedly (exit code ${code ?? "unknown"}). ` +
+        `Check the output log above for details.`;
+    }
+
     db.update(hostedBotsTable)
       .set({
         status: wasIntentional ? "stopped" : "crashed",
-        errorMessage: wasIntentional
-          ? null
-          : `Process exited with code ${code ?? "unknown"}.${tailLog ? `\n\n${tailLog}` : ""}`,
+        errorMessage,
         recentLog: tailLog,
       })
       .where(eq(hostedBotsTable.ticketId, ticketId))
