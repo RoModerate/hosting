@@ -1,58 +1,56 @@
-# Lumora — Bot Host Hub
+# Lumora Portal
 
-A Discord bot hosting platform. Users upload bot code (ZIP), activate it with a hosting key, and manage it via the Lumora web portal or Discord slash commands. Features include AI-powered crash repair, live log streaming, and an admin panel.
+A Discord bot hosting and management platform. Users upload Discord bots (Node.js or Python), and Lumora keeps them online 24/7 with auto-repair, file management, and a support ticket system.
 
-## Stack
+## Architecture
 
-- **Frontend**: React 19 + Vite + Tailwind CSS v4 + Radix UI + Wouter (port 22333)
-- **Backend**: Express 5 + Discord.js 14 (port 8080, mounted at `/api`)
-- **Database**: PostgreSQL via Drizzle ORM (Replit managed)
-- **Package manager**: pnpm workspaces (monorepo)
-- **Language**: TypeScript 5.9 / Node 24
+pnpm monorepo with three artifacts:
 
-## Monorepo layout
-
-```
-artifacts/
-  api-server/   — Express API + Discord bot
-  web/          — React SPA (Lumora Portal)
-  mockup-sandbox/ — Component preview dev server
-lib/
-  db/           — Drizzle schema & client
-  api-spec/     — OpenAPI spec (openapi.yaml)
-  api-zod/      — Generated Zod validators
-  api-client-react/ — Generated React query hooks
-scripts/        — Workspace utility scripts
-```
-
-## Running locally
-
-Three workflows are configured in Replit:
-
-| Workflow | Command | Port |
+| Artifact | Port | Purpose |
 |---|---|---|
-| `artifacts/web: web` | `pnpm --filter @workspace/web run dev` | 22333 |
-| `artifacts/api-server: API Server` | `pnpm --filter @workspace/api-server run dev` | 8080 |
-| `artifacts/mockup-sandbox: Component Preview Server` | `pnpm --filter @workspace/mockup-sandbox run dev` | 8081 |
+| `artifacts/api-server` | 8080 | Express v5 REST API + Discord bot |
+| `artifacts/web` | 22333 | React 19 + Vite frontend |
+| `artifacts/mockup-sandbox` | — | UI component design sandbox |
 
-## Required environment
+Shared libraries in `lib/`:
+- `lib/db` — Drizzle ORM schema + PostgreSQL client (Replit managed DB)
+- `lib/api-spec` — OpenAPI spec
+- `lib/api-zod` — Zod validators generated from spec
+- `lib/api-client-react` — TanStack Query hooks generated from spec
 
-| Variable | Notes |
-|---|---|
-| `DATABASE_URL` | Auto-managed by Replit PostgreSQL |
-| `SESSION_SECRET` | Secret — set via Replit Secrets |
-| `PORT` | Set to `8080` for the API server |
+## How to run
 
-Discord credentials (bot token, OAuth client ID/secret, guild ID) are stored at runtime in the `app_config` database table and can be configured through the admin panel.
+Both workflows start automatically:
+- **API Server**: `pnpm --filter @workspace/api-server run dev` (builds with esbuild, then runs)
+- **Web**: `pnpm --filter @workspace/web run dev` (Vite dev server)
 
-## Database schema
+Install dependencies: `pnpm install`  
+Push DB schema: `pnpm --filter @workspace/db run push`
 
-Tables: `tickets`, `hosting_keys`, `hosted_bots`, `app_config`.
-Schema lives in `lib/db/src/schema/`. Run migrations with:
-```bash
-cd lib/db && pnpm drizzle-kit push
-```
+## Environment variables
+
+| Key | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | ✓ | Replit managed — set automatically |
+| `SESSION_SECRET` | ✓ | Secret — stored in Replit Secrets |
+| `PORT` | ✓ | `8080` for API server (shared env) |
+| `DISCORD_CLIENT_ID` | ✓ | OAuth app client ID |
+| `DISCORD_CLIENT_SECRET` | ✓ | Secret — stored in Replit Secrets |
+| `DISCORD_BOT_TOKEN` | ✓ | Secret — stored in Replit Secrets |
+| `DISCORD_GUILD_ID` | ✓ | Target Discord server ID |
+| `DISCORD_STAFF_ROLE_ID` | ✓ | Role that can manage tickets |
+| `DISCORD_TICKET_CATEGORY_NAME` | — | Defaults to `"Tickets"` |
+| `OPENROUTER_API_KEY` | — | Secret — enables AI repair/explain features |
+| `OPENROUTER_MODEL` | — | Defaults to `openai/gpt-4o-mini` |
+| `ADMIN_PASSWORD` | — | Defaults to `lumora-admin` — **change in production** |
+
+## Tech stack
+
+- **Frontend**: React 19, Vite, Tailwind CSS v4, Wouter, TanStack Query, Radix UI / shadcn, CodeMirror
+- **Backend**: Express v5, Node.js ESM, Discord.js v14, Drizzle ORM, Pino logging
+- **Database**: PostgreSQL (Replit managed)
+- **Tooling**: TypeScript, Zod, Orval (API client codegen), esbuild
 
 ## User preferences
 
-- Keep the existing monorepo structure and pnpm workspace setup.
+- Keep the existing monorepo structure intact
