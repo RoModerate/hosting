@@ -59,6 +59,71 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Deployment Stages ───────────────────────────────────────────────────────
+function DeploymentStages({ status, botName }: { status: string; botName?: string | null }) {
+  const isInstalling = status === 'installing';
+  const isStarting   = status === 'starting';
+  const isConnecting = status === 'connecting';
+  const isOnline     = status === 'online' || status === 'running';
+  const isLoginFail  = status === 'login_failed';
+  const isCrashed    = status === 'crashed' || status === 'error';
+
+  const stages = [
+    {
+      label: 'Installing dependencies',
+      done: !isInstalling,
+      active: isInstalling,
+      failed: false,
+    },
+    {
+      label: 'Starting bot process',
+      done: isConnecting || isOnline || isLoginFail || isCrashed,
+      active: isStarting,
+      failed: false,
+    },
+    {
+      label: 'Connecting to Discord',
+      done: isOnline,
+      active: isConnecting,
+      failed: isLoginFail,
+    },
+    {
+      label: isOnline && botName ? `Online as ${botName}` : 'Online',
+      done: isOnline,
+      active: false,
+      failed: isCrashed && (isConnecting || isStarting || isOnline),
+    },
+  ];
+
+  return (
+    <div className="px-5 py-3 border-b border-white/[0.04] space-y-1.5">
+      {stages.map((stage, i) => (
+        <div key={i} className="flex items-center gap-2.5">
+          <div className="shrink-0 w-4 h-4 flex items-center justify-center">
+            {stage.failed ? (
+              <span className="text-red-400/70 text-[11px] font-bold">✗</span>
+            ) : stage.done ? (
+              <span className="text-emerald-400/80 text-[11px]">✓</span>
+            ) : stage.active ? (
+              <span className="inline-block h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+            ) : (
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/10" />
+            )}
+          </div>
+          <span className={`text-[10.5px] font-mono transition-colors ${
+            stage.failed ? 'text-red-400/60'
+            : stage.done  ? 'text-emerald-400/70'
+            : stage.active ? 'text-blue-400'
+            : 'text-white/18'
+          }`}>
+            {stage.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DiscordAvatar({ avatar, id, username }: { avatar: string | null; id: string; username: string }) {
   const src = avatar
     ? `https://cdn.discordapp.com/avatars/${id}/${avatar}.${avatar.startsWith('a_') ? 'gif' : 'png'}?size=64`
@@ -664,7 +729,14 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <StatusBadge status={hostedBot.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={hostedBot.status} />
+                    {(hostedBot as any).botName && (hostedBot.status === 'online' || hostedBot.status === 'running') && (
+                      <span className="text-[9px] font-mono text-emerald-400/50 whitespace-nowrap">
+                        {(hostedBot as any).botName}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Stats row */}
@@ -681,20 +753,19 @@ export default function Dashboard() {
                   ))}
                 </div>
 
-                {/* Processing indicator */}
-                {isProcessing && (
-                  <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-2.5 bg-blue-500/[0.05]">
+                {/* Deployment stages progress */}
+                {(isProcessing || hostedBot.status === 'online' || hostedBot.status === 'running' || hostedBot.status === 'login_failed') && (
+                  <DeploymentStages
+                    status={hostedBot.status}
+                    botName={(hostedBot as any).botName}
+                  />
+                )}
+
+                {/* Processing status message while busy */}
+                {isProcessing && hostedBot.errorMessage && (
+                  <div className="px-5 py-2.5 border-b border-blue-500/10 flex items-center gap-2.5 bg-blue-500/[0.04]">
                     <Loader2 className="h-3 w-3 text-blue-400 animate-spin shrink-0" />
-                    <span className="text-xs font-mono text-blue-400">
-                      {hostedBot.errorMessage
-                        ? hostedBot.errorMessage
-                        : hostedBot.status === 'installing' ? 'Installing dependencies…'
-                        : hostedBot.status === 'starting' ? 'Starting bot…'
-                        : 'Connecting to Discord…'}
-                    </span>
-                    {!hostedBot.errorMessage && (
-                      <span className="text-xs text-white/20 font-mono ml-1">This may take a minute</span>
-                    )}
+                    <span className="text-xs font-mono text-blue-400/80 truncate">{hostedBot.errorMessage}</span>
                   </div>
                 )}
 
@@ -817,7 +888,42 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {!hostedBot?.errorMessage && !hostedBot?.aiExplanation && !(hostedBot && (hostedBot as any).repairAttempts > 0) && (
+                {/* AI repair history */}
+                {(() => {
+                  let entries: Array<{ timestamp: string; action: string; description: string }> = [];
+                  try { entries = JSON.parse((hostedBot as any)?.repairLog ?? '[]'); } catch { entries = []; }
+                  if (entries.length === 0) return null;
+                  return (
+                    <div className="rounded-xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
+                      <div className="px-5 py-3 border-b border-white/[0.05] flex items-center gap-2">
+                        <Zap className="h-3.5 w-3.5 text-[#6366f1]/60" />
+                        <span className="font-mono text-xs text-white/45 font-semibold tracking-wider">AI REPAIR HISTORY</span>
+                        <span className="ml-auto font-mono text-[10px] text-white/25 border border-white/[0.06] rounded-md px-1.5 py-0.5">
+                          {entries.length} action{entries.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-white/[0.04]">
+                        {entries.slice(-8).reverse().map((e, i) => (
+                          <div key={i} className="px-5 py-2.5 flex items-start gap-2.5">
+                            <span className="text-emerald-500/50 text-[10px] mt-0.5 shrink-0">✓</span>
+                            <div className="min-w-0 flex-1">
+                              <span className="font-mono text-[10px] text-white/50 block truncate">{e.description}</span>
+                              <span className="font-mono text-[9px] text-white/20">
+                                {(() => { try { return new Date(e.timestamp).toLocaleString(); } catch { return e.timestamp; } })()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {!hostedBot?.errorMessage && !hostedBot?.aiExplanation && !(hostedBot && (hostedBot as any).repairAttempts > 0) && (() => {
+                  let entries: Array<unknown> = [];
+                  try { entries = JSON.parse((hostedBot as any)?.repairLog ?? '[]'); } catch { entries = []; }
+                  return entries.length === 0;
+                })() && (
                   <div className="rounded-xl border border-white/[0.05] bg-[#0d0d18] px-5 py-10 flex flex-col items-center text-center">
                     <Activity className="h-8 w-8 text-white/[0.07] mb-3" />
                     <p className="font-mono text-xs text-white/20 tracking-wider">

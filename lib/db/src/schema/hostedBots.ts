@@ -34,6 +34,12 @@ export const hostedBotsTable = pgTable("hosted_bots", {
   // How many AI-powered auto-repair attempts were made during the last deployment.
   // Resets to 0 on each fresh upload.
   repairAttempts: integer("repair_attempts").notNull().default(0),
+  // Detected bot username after Discord ready fires (e.g. "MyBot#0000").
+  // Set automatically on first successful login; null until then.
+  botName: text("bot_name"),
+  // JSON array of RepairHistoryEntry objects recording every automated fix.
+  // Appended to by both the autonomous agent and the user-facing AI chat.
+  repairLog: text("repair_log").notNull().default("[]"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

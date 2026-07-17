@@ -538,8 +538,15 @@ function runStartupProbe(
         const who = match?.[1]?.trim();
         appendLiveLog(
           ticketId,
-          `[Discord] Login successful${who ? ` — bot online as ${who}` : ""}.\n`,
+          `[Discord] ✓ Login successful${who ? ` — bot online as ${who}` : ""}.\n`,
         );
+        // Persist bot name so the dashboard can display "Online as BotName#0000".
+        if (who) {
+          db.update(hostedBotsTable)
+            .set({ botName: who })
+            .where(eq(hostedBotsTable.ticketId, ticketId))
+            .catch(() => undefined);
+        }
       } else if (DISCORD_FAIL_PATTERNS.some((p) => p.test(text))) {
         discordSignal = "login_failed";
         appendLiveLog(
@@ -1444,7 +1451,7 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
  *
  * Fire-and-forget — never throws.
  */
-function watchForDiscordReady(ticketId: number, timeoutMs = 45_000): void {
+function watchForDiscordReady(ticketId: number, timeoutMs = 90_000): void {
   const startedAt = Date.now();
   let scannedUpTo = 0; // track how much of the live log we've already checked
 
@@ -1459,11 +1466,11 @@ function watchForDiscordReady(ticketId: number, timeoutMs = 45_000): void {
           const match = chunk.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
           const who = match?.[1]?.trim();
           if (who) {
-            appendLiveLog(ticketId, `[Discord] Bot online as ${who}\n`);
+            appendLiveLog(ticketId, `[Discord] ✓ Bot online as ${who}\n`);
           }
           logger.info({ ticketId, who }, "Discord client.ready detected via live log watcher");
           db.update(hostedBotsTable)
-            .set({ status: "online" })
+            .set({ status: "online", ...(who ? { botName: who } : {}) })
             .where(eq(hostedBotsTable.ticketId, ticketId))
             .catch((err: unknown) => logger.error({ err }, "Failed to set discord online status"));
           return; // done
@@ -1486,7 +1493,33 @@ function watchForDiscordReady(ticketId: number, timeoutMs = 45_000): void {
 
       if (!isRunning(ticketId)) return; // process died — crash handler takes over
       if (Date.now() - startedAt >= timeoutMs) {
-        logger.info({ ticketId }, "Discord ready watcher timed out — status stays 'connecting'");
+        logger.warn({ ticketId }, "Discord ready watcher timed out — treating as startup failure");
+        // Bot is still running but never connected — kill it so the crash handler
+        // + auto-restart pipeline can attempt an AI-powered repair.
+        appendLiveLog(
+          ticketId,
+          "[Lumora] ⚠ Bot did not connect to Discord within 90 seconds.\n" +
+          "[Lumora] Collecting logs and attempting automatic repair…\n",
+        );
+        db.update(hostedBotsTable)
+          .set({
+            status: "crashed",
+            errorMessage:
+              "The bot process started but did not connect to Discord within 90 seconds. " +
+              "This usually means the bot is stuck loading, has a missing DISCORD_TOKEN env var, " +
+              "or has an async startup error that does not crash the process. " +
+              "Lumora is attempting automatic repair.",
+            recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
+          })
+          .where(eq(hostedBotsTable.ticketId, ticketId))
+          .catch((err: unknown) => logger.error({ err }, "Failed to set watchdog-timeout status"));
+        // stopProcess sets the intentional-stop flag so the exit handler won't
+        // double-count this as a crash — we've already set status above.
+        // Clear the flag right after so auto-restart still fires.
+        stopProcess(ticketId);
+        // The process is gone now. Directly schedule an auto-restart so the
+        // repair loop (inside restartHostedBot) gets a chance to fix the bot.
+        scheduleAutoRestart(ticketId);
         return;
       }
 
@@ -1788,7 +1821,8 @@ export async function hostUploadedZip(params: {
     ticketId,
     `[Lumora] Bot root           : ${projectRoot}\n` +
     `[Lumora] Package manager    : ${pm ?? "pip"}\n` +
-    (pkgJsonPath ? `[Lumora] Using package.json : ${pkgJsonPath}\n` : ""),
+    (pkgJsonPath ? `[Lumora] Using package.json : ${pkgJsonPath}\n` : "") +
+    `[Lumora] ─── Installing dependencies ───────────────────\n`,
   );
   logger.info(
     { ticketId, projectRoot, pkgJsonPath, pm, language },
@@ -1882,8 +1916,9 @@ export async function hostUploadedZip(params: {
 
   appendLiveLog(
     ticketId,
+    `[Lumora] ✓ Dependencies installed\n` +
     `[Lumora] Start command      : ${startCommand.label}\n` +
-    `[Lumora] Starting bot…\n`,
+    `[Lumora] ─── Starting bot process ──────────────────────\n`,
   );
   logger.info(
     { ticketId, projectRoot, startCommand: startCommand.label },

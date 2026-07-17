@@ -7,12 +7,14 @@ import {
   readFileContent,
   listDirectory,
   deletePath,
-  resolveBotPath,
   FileManagerSecurityError,
   FileManagerError,
 } from "../discord/hosting/fileManager";
 import { logger } from "../lib/logger";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { execSync } from "node:child_process";
 
 const router: IRouter = Router();
 
@@ -20,14 +22,13 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
-// Stores the last content of a file before each write so the AI can undo it.
 
 const undoStack = new Map<number, Array<{ path: string; content: string }>>();
 
-function pushUndo(ticketId: number, path: string, content: string) {
+function pushUndo(ticketId: number, filePath: string, content: string) {
   if (!undoStack.has(ticketId)) undoStack.set(ticketId, []);
   const stack = undoStack.get(ticketId)!;
-  stack.push({ path, content });
+  stack.push({ path: filePath, content });
   if (stack.length > 20) stack.shift();
 }
 
@@ -37,30 +38,130 @@ function popUndo(ticketId: number): { path: string; content: string } | null {
   return stack.pop()!;
 }
 
-// ─── Tool definitions ────────────────────────────────────────────────────────
+// ─── Repair history ───────────────────────────────────────────────────────────
+
+interface RepairEntry {
+  timestamp: string;
+  action: string;
+  description: string;
+}
+
+async function appendRepairHistory(ticketId: number, entry: RepairEntry): Promise<void> {
+  try {
+    const { db: dbI, hostedBotsTable: tbl } = await import("@workspace/db");
+    const { eq: eqI } = await import("drizzle-orm");
+    const [row] = await dbI
+      .select({ repairLog: tbl.repairLog })
+      .from(tbl)
+      .where(eqI(tbl.ticketId, ticketId));
+    const existing: RepairEntry[] = JSON.parse(row?.repairLog ?? "[]");
+    existing.push(entry);
+    await dbI
+      .update(tbl)
+      .set({ repairLog: JSON.stringify(existing.slice(-50)) })
+      .where(eqI(tbl.ticketId, ticketId));
+  } catch { /* non-fatal */ }
+}
+
+// ─── Tool definitions ─────────────────────────────────────────────────────────
 
 const AI_TOOLS = [
   {
     type: "function",
     function: {
-      name: "write_file",
+      name: "view_logs",
       description:
-        "Write or overwrite a file in the user's bot project. Use to apply code fixes. Always write the complete file content. The previous content is saved automatically for undo.",
+        "View the bot's recent stdout/stderr output. Use this FIRST when diagnosing a crash or unexpected behaviour.",
       parameters: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Relative file path within the bot project (e.g. 'index.js', 'src/bot.py'). No leading slash.",
-          },
-          content: {
-            type: "string",
-            description: "Complete content to write to the file.",
-          },
-          reason: {
-            type: "string",
-            description: "Short explanation of what this fix does (shown to the user).",
-          },
+          lines: { type: "number", description: "Number of recent lines to return (default 80)." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "check_status",
+      description:
+        "Get the current bot deployment status, error messages, restart count, and bot name. Use after restarting to confirm the bot came online.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description: "List files and directories in the user's bot project.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Directory to list. Use '' or '.' for project root." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "Read the current content of a file in the bot project.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative file path to read." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_files",
+      description:
+        "Grep for a text pattern across all bot source files. Use to find where a variable is used, locate an import, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Text to search for." },
+          path:  { type: "string", description: "Sub-directory to search (defaults to root)." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_file",
+      description:
+        "Make a targeted replacement inside a file. Safer than write_file for small precise changes — the old_text must match exactly (including whitespace).",
+      parameters: {
+        type: "object",
+        properties: {
+          path:     { type: "string", description: "Relative file path." },
+          old_text: { type: "string", description: "Exact text to find and replace." },
+          new_text: { type: "string", description: "Replacement text." },
+          reason:   { type: "string", description: "Short explanation of the change." },
+        },
+        required: ["path", "old_text", "new_text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description:
+        "Write or overwrite a complete file. Always write the ENTIRE file content. The previous content is saved for undo. Use edit_file for small targeted changes.",
+      parameters: {
+        type: "object",
+        properties: {
+          path:    { type: "string", description: "Relative file path within the bot project." },
+          content: { type: "string", description: "Complete content to write." },
+          reason:  { type: "string", description: "Short explanation of what this fix does." },
         },
         required: ["path", "content"],
       },
@@ -69,54 +170,31 @@ const AI_TOOLS = [
   {
     type: "function",
     function: {
-      name: "read_file",
-      description: "Read the current content of a file in the user's bot project.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Relative file path to read (e.g. 'index.js', 'config.json').",
-          },
-        },
-        required: ["path"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_files",
-      description: "List files and directories in the user's bot project. Use to explore the project structure.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Directory to list. Use '' or '.' for the project root.",
-          },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "delete_file",
-      description: "Delete a file or empty directory from the user's bot project.",
+      description: "Delete a file or empty directory from the bot project.",
       parameters: {
         type: "object",
         properties: {
-          path: {
-            type: "string",
-            description: "Relative file path to delete.",
-          },
-          reason: {
-            type: "string",
-            description: "Short reason for deletion.",
-          },
+          path:   { type: "string", description: "Relative file path to delete." },
+          reason: { type: "string", description: "Short reason for deletion." },
         },
         required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "install_dependencies",
+      description:
+        "Install a missing npm package (Node.js) or pip package (Python). Use when the bot crashes with MODULE_NOT_FOUND or ModuleNotFoundError.",
+      parameters: {
+        type: "object",
+        properties: {
+          package: { type: "string", description: "Package name (e.g. 'dotenv', 'discord.py')." },
+          runtime: { type: "string", enum: ["node", "python"], description: "Runtime. Defaults to node." },
+        },
+        required: ["package"],
       },
     },
   },
@@ -124,12 +202,8 @@ const AI_TOOLS = [
     type: "function",
     function: {
       name: "undo_last_change",
-      description:
-        "Undo the last write_file change by restoring the previous file content. Can be called multiple times to undo multiple changes.",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      description: "Restore the last changed file to its previous state.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -140,68 +214,52 @@ const AI_TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          message: {
-            type: "string",
-            description: "Short message to show the user while the bot restarts.",
-          },
+          message: { type: "string", description: "Short message to show while restarting." },
         },
       },
     },
   },
 ];
 
-// ─── Execute a single tool call ──────────────────────────────────────────────
+// ─── Tool executor ────────────────────────────────────────────────────────────
 
 async function executeTool(
   name: string,
-  args: Record<string, string>,
+  args: Record<string, unknown>,
   ticketId: number,
 ): Promise<string> {
   try {
-    if (name === "write_file") {
-      const filePath = args["path"]?.replace(/^\/+/, "");
-      const content = args["content"];
-      if (!filePath || content === undefined) return "Error: path and content are required.";
-
-      if (filePath.includes("..") || filePath.startsWith("/")) {
-        return `Error: Invalid path "${filePath}".`;
-      }
-
-      // Save old content for undo before overwriting
-      try {
-        const existing = await readFileContent(ticketId, filePath);
-        pushUndo(ticketId, filePath, existing.content);
-      } catch {
-        // File doesn't exist yet — push empty string as undo target
-        pushUndo(ticketId, filePath, "");
-      }
-
-      await writeFileContent(ticketId, filePath, content);
-      const reason = args["reason"] ? ` — ${args["reason"]}` : "";
-      logger.info({ ticketId, filePath }, "AI agent wrote file fix");
-      return `✓ Wrote ${filePath}${reason}`;
+    // ── view_logs ─────────────────────────────────────────────────────────
+    if (name === "view_logs") {
+      const lines = Number(args["lines"] ?? 80);
+      const log = getLiveLog(ticketId);
+      if (!log) return "(no logs yet — the bot may not have started)";
+      const logLines = log.split("\n");
+      const recent = logLines.slice(-lines).join("\n");
+      return "```\n" + recent + "\n```";
     }
 
-    if (name === "read_file") {
-      const filePath = args["path"]?.replace(/^\/+/, "");
-      if (!filePath) return "Error: path is required.";
-
-      if (filePath.includes("..") || filePath.startsWith("/")) {
-        return `Error: Invalid path "${filePath}".`;
-      }
-
-      const result = await readFileContent(ticketId, filePath);
-      const preview = result.content.slice(0, 4000);
-      const truncated = result.content.length > 4000 ? `\n... (truncated, ${result.content.length} bytes total)` : "";
-      return `\`\`\`\n${preview}${truncated}\n\`\`\``;
+    // ── check_status ──────────────────────────────────────────────────────
+    if (name === "check_status") {
+      const bot = await getHostedBotStatus(ticketId);
+      if (!bot) return "No bot deployed.";
+      const lines = [
+        `Status: ${bot.status}`,
+        `File: ${bot.fileName}`,
+        `Start command: ${bot.startCommand || "auto-detected"}`,
+        `Restart count: ${bot.restartCount}`,
+        `Repair attempts: ${bot.repairAttempts}`,
+        (bot as any).botName ? `Bot name: ${(bot as any).botName}` : null,
+        bot.errorMessage ? `\nLast error:\n${bot.errorMessage.slice(0, 800)}` : null,
+      ].filter(Boolean).join("\n");
+      return lines;
     }
 
+    // ── list_files ────────────────────────────────────────────────────────
     if (name === "list_files") {
-      const dirPath = args["path"] || ".";
+      const dirPath = String(args["path"] || ".");
       const entries = await listDirectory(ticketId, dirPath === "." ? "" : dirPath);
-
       if (entries.length === 0) return "(empty directory)";
-
       const lines = entries.map((e) => {
         const icon = e.type === "directory" ? "📁" : "📄";
         const size = e.type === "file" ? ` (${(e.size / 1024).toFixed(1)} KB)` : "";
@@ -210,31 +268,186 @@ async function executeTool(
       return lines.join("\n");
     }
 
-    if (name === "delete_file") {
-      const filePath = args["path"]?.replace(/^\/+/, "");
+    // ── read_file ─────────────────────────────────────────────────────────
+    if (name === "read_file") {
+      const filePath = String(args["path"] ?? "").replace(/^\/+/, "");
       if (!filePath) return "Error: path is required.";
+      if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
+      const result = await readFileContent(ticketId, filePath);
+      const preview = result.content.slice(0, 6000);
+      const truncated = result.content.length > 6000
+        ? `\n... (truncated — ${result.content.length} bytes total)` : "";
+      return "```\n" + preview + truncated + "\n```";
+    }
 
-      if (filePath.includes("..") || filePath.startsWith("/")) {
-        return `Error: Invalid path "${filePath}".`;
+    // ── search_files ──────────────────────────────────────────────────────
+    if (name === "search_files") {
+      const query = String(args["query"] ?? "");
+      if (!query) return "Error: query is required.";
+
+      // Resolve the bot's tmp run directory (where the isolated copy lives)
+      const tmpDir = `/tmp/lumora-bots/${ticketId}`;
+      let baseDir = tmpDir;
+      if (!fs.existsSync(tmpDir)) {
+        const { db: dbI, hostedBotsTable: tbl } = await import("@workspace/db");
+        const { eq: eqI } = await import("drizzle-orm");
+        const [row] = await dbI.select({ extractPath: tbl.extractPath }).from(tbl).where(eqI(tbl.ticketId, ticketId));
+        baseDir = row?.extractPath ?? tmpDir;
       }
 
-      // Back up before deleting
+      const searchDirArg = String(args["path"] || ".");
+      const searchDir = searchDirArg === "." ? baseDir : path.join(baseDir, searchDirArg.replace(/^\/+/, ""));
+      if (!searchDir.startsWith(baseDir)) return "Error: path is outside project.";
+
+      const SKIP = new Set(["node_modules", ".git", "__pycache__", ".venv", "venv", "dist", "build", ".next"]);
+      const results: string[] = [];
+
+      async function walk(dir: string): Promise<void> {
+        let entries: fs.Dirent[];
+        try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (SKIP.has(e.name)) continue;
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) { await walk(full); }
+          else if (e.isFile()) {
+            try {
+              const text = await fsp.readFile(full, "utf-8");
+              const fileLines = text.split("\n");
+              const rel = path.relative(baseDir, full);
+              let count = 0;
+              fileLines.forEach((line, i) => {
+                if (results.length < 40 && count < 5 && line.includes(query)) {
+                  results.push(`${rel}:${i + 1}: ${line.trim().slice(0, 140)}`);
+                  count++;
+                }
+              });
+            } catch { /* binary */ }
+          }
+        }
+      }
+
+      await walk(searchDir);
+      return results.length > 0 ? results.join("\n") : `No matches for "${query}"`;
+    }
+
+    // ── edit_file ─────────────────────────────────────────────────────────
+    if (name === "edit_file") {
+      const filePath = String(args["path"] ?? "").replace(/^\/+/, "");
+      const oldText = String(args["old_text"] ?? "");
+      const newText = String(args["new_text"] ?? "");
+      const reason = args["reason"] ? String(args["reason"]) : undefined;
+
+      if (!filePath) return "Error: path is required.";
+      if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
+      if (!oldText) return "Error: old_text is required.";
+
+      let current: string;
+      try {
+        const read = await readFileContent(ticketId, filePath);
+        current = read.content;
+      } catch {
+        return `Error: File not found: ${filePath}`;
+      }
+
+      if (!current.includes(oldText)) {
+        return `Error: The old_text was not found in ${filePath}. The text must match exactly including whitespace and indentation.`;
+      }
+
+      pushUndo(ticketId, filePath, current);
+      const updated = current.replace(oldText, newText);
+      await writeFileContent(ticketId, filePath, updated);
+
+      const reasonStr = reason ? ` — ${reason}` : "";
+      await appendRepairHistory(ticketId, {
+        timestamp: new Date().toISOString(),
+        action: "edit_file",
+        description: reason ?? `Edited ${filePath}`,
+      });
+      logger.info({ ticketId, filePath }, "AI chat agent targeted-edited file");
+      return `✓ Edited ${filePath}${reasonStr}`;
+    }
+
+    // ── write_file ────────────────────────────────────────────────────────
+    if (name === "write_file") {
+      const filePath = String(args["path"] ?? "").replace(/^\/+/, "");
+      const content = String(args["content"] ?? "");
+      if (!filePath || content === undefined) return "Error: path and content are required.";
+      if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
+
+      try {
+        const existing = await readFileContent(ticketId, filePath);
+        pushUndo(ticketId, filePath, existing.content);
+      } catch {
+        pushUndo(ticketId, filePath, "");
+      }
+
+      await writeFileContent(ticketId, filePath, content);
+      const reason = args["reason"] ? ` — ${args["reason"]}` : "";
+      await appendRepairHistory(ticketId, {
+        timestamp: new Date().toISOString(),
+        action: "write_file",
+        description: args["reason"] ? String(args["reason"]) : `Rewrote ${filePath}`,
+      });
+      logger.info({ ticketId, filePath }, "AI chat agent wrote file");
+      return `✓ Wrote ${filePath}${reason}`;
+    }
+
+    // ── delete_file ───────────────────────────────────────────────────────
+    if (name === "delete_file") {
+      const filePath = String(args["path"] ?? "").replace(/^\/+/, "");
+      if (!filePath) return "Error: path is required.";
+      if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
       try {
         const existing = await readFileContent(ticketId, filePath);
         pushUndo(ticketId, filePath, existing.content);
       } catch { /* ignore */ }
-
       await deletePath(ticketId, filePath);
       const reason = args["reason"] ? ` — ${args["reason"]}` : "";
       return `✓ Deleted ${filePath}${reason}`;
     }
 
+    // ── install_dependencies ──────────────────────────────────────────────
+    if (name === "install_dependencies") {
+      const pkg = String(args["package"] ?? "").trim();
+      const runtime = String(args["runtime"] ?? "node");
+      if (!pkg) return "Error: package is required.";
+      if (!/^[@a-zA-Z0-9._\/-]+$/.test(pkg)) return `Error: "${pkg}" is not a valid package name.`;
+
+      const tmpDir = `/tmp/lumora-bots/${ticketId}`;
+      let installDir = tmpDir;
+      if (!fs.existsSync(tmpDir)) {
+        const { db: dbI, hostedBotsTable: tbl } = await import("@workspace/db");
+        const { eq: eqI } = await import("drizzle-orm");
+        const [row] = await dbI.select({ extractPath: tbl.extractPath }).from(tbl).where(eqI(tbl.ticketId, ticketId));
+        installDir = row?.extractPath ?? tmpDir;
+      }
+
+      try {
+        if (runtime === "python") {
+          execSync(`python3 -m pip install --no-input --disable-pip-version-check ${pkg}`,
+            { cwd: installDir, timeout: 120_000, stdio: "pipe" });
+        } else {
+          execSync(`npm install --no-audit --no-fund ${pkg}`,
+            { cwd: installDir, timeout: 120_000, stdio: "pipe" });
+        }
+        await appendRepairHistory(ticketId, {
+          timestamp: new Date().toISOString(),
+          action: "install_dependencies",
+          description: `Installed ${pkg} (${runtime})`,
+        });
+        logger.info({ ticketId, pkg, runtime }, "AI chat agent installed package");
+        return `✓ Installed ${pkg}`;
+      } catch (err: any) {
+        const msg = err?.stderr?.toString?.()?.slice(0, 400) ?? String(err);
+        return `Failed to install ${pkg}: ${msg}`;
+      }
+    }
+
+    // ── undo_last_change ──────────────────────────────────────────────────
     if (name === "undo_last_change") {
       const entry = popUndo(ticketId);
       if (!entry) return "Nothing to undo — no previous changes recorded this session.";
-
       if (entry.content === "") {
-        // File was newly created — delete it to undo
         try {
           await deletePath(ticketId, entry.path);
           return `✓ Undid creation of ${entry.path} (file deleted).`;
@@ -242,11 +455,11 @@ async function executeTool(
           return `Could not undo — ${entry.path} may already be gone.`;
         }
       }
-
       await writeFileContent(ticketId, entry.path, entry.content);
       return `✓ Restored ${entry.path} to its previous state.`;
     }
 
+    // ── restart_bot ───────────────────────────────────────────────────────
     if (name === "restart_bot") {
       await updateHostedBot(ticketId, {
         status: "starting",
@@ -254,7 +467,12 @@ async function executeTool(
         aiExplanation: null,
       });
       restartHostedBot(ticketId, () => undefined).catch(() => undefined);
-      return "✓ Bot restart initiated — it will be online in a moment.";
+      await appendRepairHistory(ticketId, {
+        timestamp: new Date().toISOString(),
+        action: "restart_bot",
+        description: args["message"] ? String(args["message"]) : "Bot restarted to apply fix",
+      });
+      return "✓ Bot restart initiated — checking status in a moment.";
     }
 
     return `Unknown tool: ${name}`;
@@ -266,7 +484,7 @@ async function executeTool(
   }
 }
 
-// ─── Route ───────────────────────────────────────────────────────────────────
+// ─── Route ────────────────────────────────────────────────────────────────────
 
 router.post("/ai/chat", async (req, res) => {
   const session = await resolveSession(req);
@@ -287,7 +505,6 @@ router.post("/ai/chat", async (req, res) => {
 
   const apiKey = process.env["OPENROUTER_API_KEY"];
   if (!apiKey) {
-    // Try getting it from DB config
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
     const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
@@ -309,20 +526,22 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  // Gather bot context
-  const bot = await getHostedBotStatus(session.ticket.id);
-  const liveLog = getLiveLog(session.ticket.id);
+  const ticketId = session.ticket.id;
+  const bot = await getHostedBotStatus(ticketId);
+  const liveLog = getLiveLog(ticketId);
 
   const botContext = bot
     ? [
-        `Bot file: ${bot.fileName || "none"}`,
+        `Bot file: ${bot.fileName}`,
         `Status: ${bot.status}`,
         `Start command: ${bot.startCommand || "auto-detected"}`,
         `Restart count: ${bot.restartCount}`,
+        `Repair attempts: ${bot.repairAttempts}`,
+        (bot as any).botName ? `Bot name: ${(bot as any).botName}` : null,
         bot.errorMessage
-          ? `\nCrash log (last 2000 chars):\n\`\`\`\n${bot.errorMessage.slice(-2000)}\n\`\`\``
-          : "",
-        bot.aiExplanation ? `\nPrevious AI diagnosis: ${bot.aiExplanation}` : "",
+          ? `\nCurrent error:\n\`\`\`\n${bot.errorMessage.slice(-2000)}\n\`\`\``
+          : null,
+        bot.aiExplanation ? `\nPrevious AI diagnosis: ${bot.aiExplanation}` : null,
       ]
         .filter(Boolean)
         .join("\n")
@@ -332,45 +551,52 @@ router.post("/ai/chat", async (req, res) => {
     ? `\nRecent console output (last 1500 chars):\n\`\`\`\n${liveLog.slice(-1500)}\n\`\`\``
     : "";
 
-  const systemPrompt = `You are Lumora AI — an autonomous coding agent embedded in the Lumora Discord bot hosting portal.
+  const systemPrompt = `You are Lumora AI — an autonomous Discord bot deployment fixer embedded in the Lumora hosting portal.
 
-## Current Bot Context
+## Current Bot State
 ${botContext}${consoleContext}
 
-## Your Capabilities
-You have full access to the user's bot project files:
-- **read_file**: Read any file to understand the code
-- **list_files**: List files/directories to explore the project structure
-- **write_file**: Write or overwrite files to apply fixes (previous content is automatically saved for undo)
-- **delete_file**: Delete files that are no longer needed
-- **undo_last_change**: Restore a file to its state before the last write_file or delete_file call
-- **restart_bot**: Restart the bot process to apply changes
+## Your Tools
+- **view_logs** — Read recent bot stdout/stderr. Start HERE when diagnosing any crash or problem.
+- **check_status** — Get status, error message, restart count, bot name. Use after restarting to confirm success.
+- **list_files** — Explore the project structure.
+- **read_file** — Read any source file.
+- **search_files** — Grep across all project files.
+- **edit_file** — Targeted search-and-replace inside a file (best for small precise changes).
+- **write_file** — Write a complete file (use for full rewrites; edit_file is safer for small changes).
+- **delete_file** — Delete a file.
+- **undo_last_change** — Restore the last changed file.
+- **install_dependencies** — Install a missing npm or pip package.
+- **restart_bot** — Restart the bot to apply changes.
 
-## Workflow
-When a user asks you to fix, modify, or create something:
-1. If you need to understand the code first, use read_file or list_files
-2. Apply fixes with write_file (always write complete file content, never partial)
-3. Use restart_bot after writing fixes so changes take effect
-4. Send a text message summarising exactly what you changed and why
+## Autonomous Repair Workflow
+When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT waiting for user input:
+1. Call \`view_logs\` to see what happened
+2. Call \`check_status\` for the full error context
+3. Identify the SPECIFIC root cause (not just "it crashed")
+4. Fix it — \`edit_file\` for targeted changes, \`write_file\` for full rewrites, \`install_dependencies\` for missing packages
+5. Call \`restart_bot\`
+6. Call \`check_status\` to verify the bot came online
+7. Tell the user exactly what was wrong and what you fixed (2-3 sentences)
 
-When a user asks you to undo:
-1. Call undo_last_change to restore the previous file state
-2. Use restart_bot to apply the restored state
-3. Confirm what was undone
+## Common Fixes
+- **MODULE_NOT_FOUND / ModuleNotFoundError**: \`install_dependencies\` + restart
+- **Invalid token / TokenInvalid**: use \`search_files\` to find where token is read; if env var name mismatches what's in Secrets, \`edit_file\` to fix the code (or tell user to rename the secret)
+- **DisallowedIntents**: tell user to enable intents in Discord Developer Portal → Bot → Privileged Gateway Intents
+- **Missing scripts.start**: \`read_file package.json\`, then \`edit_file\` to add the start script
+- **Wrong entry file**: \`list_files\` to find the real main file, \`edit_file\` to fix package.json
+- **Syntax error**: \`read_file\` the offending file, \`edit_file\` to fix it
 
 ## Rules
-- Be concise and direct — get to the fix without preamble
-- Always write complete file content in write_file, never just a snippet
-- Use code blocks when showing code in chat
-- Never expose token/secret values even if you see them in files
-- After writing fixes, always restart the bot
-- When exploring a project for the first time, start with list_files to understand the structure
-- Supported runtimes: Node.js (discord.js, Eris, Sapphire), Python (discord.py, py-cord, hikari, disnake), Java (JDA, Javacord, D4J)
-- **YOU MUST ALWAYS END WITH A TEXT MESSAGE.** After every tool-call sequence, send a plain-text reply explaining what you did. Never let your final action be a tool call with no follow-up text — the user cannot see tool results directly.`;
+- **Be autonomous** — diagnose and fix first, explain after. Never say "you should try X" — just do it.
+- **edit_file over write_file** — for small changes, edit_file is safer and preserves surrounding code
+- Never expose token or secret values even if you see them in files
+- Always call \`restart_bot\` after making file changes
+- Always call \`check_status\` after restarting to confirm the bot came online
+- Maximum 3 repair attempts per conversation before asking the user for help
+- **Always end with a text message** summarizing what you found, what you changed, and the current status
+- Supported runtimes: Node.js (discord.js, Eris, Sapphire), Python (discord.py, py-cord, hikari, disnake, nextcord)`;
 
-  const ticketId = session.ticket.id;
-
-  // Types for the multi-turn message history
   type ChatMsg =
     | { role: "system"; content: string }
     | { role: "user"; content: string }
@@ -383,12 +609,12 @@ When a user asks you to undo:
     function: { name: string; arguments: string };
   }
 
-  const MAX_AGENT_TURNS = 8;
+  const MAX_AGENT_TURNS = 10;
 
   try {
     const history: ChatMsg[] = [
       { role: "system", content: systemPrompt },
-      ...messages.slice(-12).map((m) => ({
+      ...messages.slice(-14).map((m) => ({
         role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
         content: String(m.content).slice(0, 4000),
       })),
@@ -397,7 +623,6 @@ When a user asks you to undo:
     const allToolResults: Array<{ tool: string; result: string }> = [];
     let finalContent = "";
 
-    // ── Multi-turn agent loop ─────────────────────────────────────────────
     for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
       const response = await fetch(OPENROUTER_URL, {
         method: "POST",
@@ -412,8 +637,8 @@ When a user asks you to undo:
           messages: history,
           tools: AI_TOOLS,
           tool_choice: "auto",
-          temperature: 0.2,
-          max_tokens: 1500,
+          temperature: 0.1,
+          max_tokens: 2000,
         }),
       });
 
@@ -424,16 +649,12 @@ When a user asks you to undo:
           res.status(502).json({ error: "AI service temporarily unavailable. Try again shortly." });
           return;
         }
-        // On later turns, fall back to whatever we have
         break;
       }
 
       const data = (await response.json()) as {
         choices?: Array<{
-          message?: {
-            content?: string | null;
-            tool_calls?: ToolCall[];
-          };
+          message?: { content?: string | null; tool_calls?: ToolCall[] };
           finish_reason?: string;
         }>;
       };
@@ -442,54 +663,46 @@ When a user asks you to undo:
       const toolCalls = msg?.tool_calls ?? [];
       const content = msg?.content ?? null;
 
-      // Add assistant turn to history
       history.push({
         role: "assistant",
         content,
         ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       } as ChatMsg);
 
-      // No tool calls — AI is done
       if (toolCalls.length === 0) {
         finalContent = content ?? "";
         break;
       }
 
-      // Execute all tool calls in this round
       const roundResults: { tool_call_id: string; tool: string; result: string }[] = [];
       for (const tc of toolCalls) {
-        let args: Record<string, string> = {};
-        try {
-          args = JSON.parse(tc.function.arguments) as Record<string, string>;
-        } catch { /* ignore */ }
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(tc.function.arguments) as Record<string, unknown>; }
+        catch { /* ignore */ }
 
         const result = await executeTool(tc.function.name, args, ticketId);
         allToolResults.push({ tool: tc.function.name, result });
         roundResults.push({ tool_call_id: tc.id, tool: tc.function.name, result });
       }
 
-      // Feed tool results back into history
       for (const r of roundResults) {
         history.push({ role: "tool", tool_call_id: r.tool_call_id, content: r.result });
       }
     }
 
-    // If the model completed all tool calls but sent no closing text, build a
-    // fallback summary so the user always sees a message (not just checkmarks).
+    // If model finished with tools but no closing text, build a plain-English fallback.
     if (!finalContent && allToolResults.length > 0) {
       const actions = allToolResults.map((r) => {
-        if (r.tool === "write_file") return "applied a code fix";
+        if (r.tool === "write_file" || r.tool === "edit_file") return "applied a code fix";
         if (r.tool === "restart_bot") return "restarted the bot";
-        if (r.tool === "install_dependencies") return "installed a dependency";
+        if (r.tool === "install_dependencies") return "installed a missing package";
         if (r.tool === "delete_file") return "deleted a file";
         if (r.tool === "undo_last_change") return "undid the last change";
-        if (r.tool === "read_file" || r.tool === "list_files") return null; // read-only, skip
+        if (r.tool === "check_status" || r.tool === "view_logs" || r.tool === "read_file" || r.tool === "list_files" || r.tool === "search_files") return null;
         return r.tool.replace(/_/g, " ");
       }).filter(Boolean);
       const unique = [...new Set(actions)];
-      finalContent = unique.length > 0
-        ? `Done — ${unique.join(", ")}.`
-        : "Done.";
+      finalContent = unique.length > 0 ? `Done — ${unique.join(", ")}.` : "Done.";
     }
 
     res.json({ content: finalContent, toolResults: allToolResults });
