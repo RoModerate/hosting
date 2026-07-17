@@ -20,6 +20,12 @@ import {
   tryConsumeAutoRestartAttempt,
 } from "./processManager";
 import { explainHostingFailure } from "./aiExplain";
+import {
+  analyzeAndFixBeforeLaunch,
+  repairCrashedBot,
+  resolveTokenAlias,
+  MAX_REPAIR_ATTEMPTS,
+} from "./aiRepair";
 
 export const MAX_ZIP_BYTES = 100 * 1024 * 1024; // 100MB
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — large monorepos can be slow
@@ -1102,6 +1108,7 @@ export async function updateHostedBot(
     envVars: string;
     language: string;
     recentLog: string;
+    repairAttempts: number;
   }>,
 ): Promise<number> {
   const existing = await db
@@ -1179,6 +1186,128 @@ function scheduleAutoRestart(
       logger.error({ err, ticketId }, "Auto-restart attempt failed");
     });
   }, delay);
+}
+
+// ─── AI-powered repair loop ───────────────────────────────────────────────────
+
+interface RepairLoopParams {
+  ticketId: number;
+  projectRoot: string;
+  persistentBotDir: string;
+  language: BotLanguage;
+  pkg: Record<string, unknown> | null;
+  pm: PackageManager | null;
+  fileName: string;
+  startCmd: StartCommand;
+  crashOutput: string;
+  userVars: Record<string, string>;
+  onCrash?: (info: { exitCode: number | null }) => void;
+}
+
+/**
+ * Attempts up to MAX_REPAIR_ATTEMPTS AI-powered repairs on a crashed bot.
+ *
+ * Each iteration:
+ *  1. Asks the AI to analyse the crash and apply safe fixes (package installs,
+ *     start-script patches, etc.)
+ *  2. Re-probes the bot with the patched code.
+ *  3. If the bot is now running, attaches supervision and returns fixed=true.
+ *  4. If the bot still crashes, loops with updated crash output.
+ *
+ * Returns fixed=false when all attempts are exhausted or no fix is available.
+ */
+async function runRepairLoop(params: RepairLoopParams): Promise<{
+  fixed: boolean;
+  friendlyMessage: string;
+  lastOutput: string;
+}> {
+  const { ticketId, projectRoot, persistentBotDir, language, pkg, pm, fileName, onCrash } =
+    params;
+  let { crashOutput, userVars, startCmd } = params;
+
+  for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
+    appendLiveLog(
+      ticketId,
+      `\n[Lumora] ─── Auto-repair attempt ${attempt}/${MAX_REPAIR_ATTEMPTS} ─────────────────────\n`,
+    );
+    await updateHostedBot(ticketId, { repairAttempts: attempt });
+
+    const repair = await repairCrashedBot({
+      projectRoot,
+      persistentDir: persistentBotDir,
+      language,
+      pkg,
+      crashOutput,
+      userVars,
+      attemptNumber: attempt,
+      fileName,
+      ticketId,
+    });
+
+    for (const fix of repair.appliedFixes) {
+      appendLiveLog(ticketId, `[Lumora] Fixed: ${fix}\n`);
+    }
+
+    if (repair.appliedFixes.length === 0) {
+      // No automated fix is possible — further retries won't help.
+      if (repair.requiresUserAction && repair.userActionMessage) {
+        appendLiveLog(ticketId, `[Lumora] Action needed: ${repair.userActionMessage}\n`);
+      } else {
+        appendLiveLog(ticketId, "[Lumora] No automatic fix is available for this error.\n");
+      }
+      return { fixed: false, friendlyMessage: repair.friendlyMessage, lastOutput: crashOutput };
+    }
+
+    // Re-read package.json in case a fix modified it (e.g. added a start script).
+    let resolvedStart = startCmd;
+    if (language === "node" && pm) {
+      try {
+        const updatedPkg = JSON.parse(
+          await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
+        ) as Record<string, unknown>;
+        const resolved = resolveNodeStartCommand(projectRoot, updatedPkg, pm);
+        if (!("error" in resolved)) resolvedStart = resolved;
+      } catch {
+        /* leave unchanged */
+      }
+    }
+
+    appendLiveLog(ticketId, `[Lumora] Restarting bot after repairs…\n`);
+    const probe = await runStartupProbe(
+      resolvedStart.cmd,
+      resolvedStart.args,
+      projectRoot,
+      ticketId,
+      userVars,
+    );
+
+    if (!probe.crashed) {
+      appendLiveLog(ticketId, `[Lumora] ✓ Bot is running after auto-repair.\n`);
+      attachSupervision(ticketId, probe.child, onCrash);
+      await updateHostedBot(ticketId, {
+        status: "running",
+        errorMessage: null,
+        aiExplanation: null,
+        lastStartedAt: new Date(),
+        startCommand: resolvedStart.label,
+        recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
+      });
+      return { fixed: true, friendlyMessage: repair.friendlyMessage, lastOutput: probe.output };
+    }
+
+    crashOutput = probe.output;
+    appendLiveLog(
+      ticketId,
+      `[Lumora] Bot still crashing after repair attempt ${attempt}.\n`,
+    );
+    startCmd = resolvedStart;
+  }
+
+  return {
+    fixed: false,
+    friendlyMessage: `Lumora tried ${MAX_REPAIR_ATTEMPTS} automatic repair${MAX_REPAIR_ATTEMPTS !== 1 ? "s" : ""} but the bot is still crashing. Please review the log output and check your configuration.`,
+    lastOutput: crashOutput,
+  };
 }
 
 function attachSupervision(
@@ -1450,9 +1579,41 @@ export async function hostUploadedZip(params: {
 
   // ── Start-command resolution ────────────────────────────────────────────
   // Done after install + build so existence checks see the final filesystem.
-  const startCommand: StartCommand | { error: string } = language === "node"
+  let startCommand: StartCommand | { error: string } = language === "node"
     ? resolveNodeStartCommand(projectRoot, pkg!, pm!)
     : resolvePythonStartCommand(projectRoot);
+
+  if ("error" in startCommand) {
+    // Before giving up, try a static pre-launch fix to add a start script.
+    const earlyVars = await getHostedBotEnvVars(ticketId);
+    const preLaunch = await analyzeAndFixBeforeLaunch({
+      projectRoot,
+      persistentDir: detectedBotDir,
+      language,
+      pkg: pkg ?? {},
+      userVars: earlyVars,
+      ticketId,
+    });
+    if (preLaunch.packageJsonModified) {
+      for (const fix of preLaunch.fixes) {
+        appendLiveLog(ticketId, `[Lumora] Pre-launch fix: ${fix.description}\n`);
+      }
+      // Re-read the patched package.json and retry start-command resolution.
+      try {
+        const updatedPkg = JSON.parse(
+          await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
+        ) as Record<string, unknown>;
+        startCommand = resolveNodeStartCommand(projectRoot, updatedPkg, pm!);
+      } catch {
+        /* leave as error */
+      }
+    } else {
+      // Log token alias notice even when not fixing start script
+      for (const fix of preLaunch.fixes) {
+        appendLiveLog(ticketId, `[Lumora] Note: ${fix.description}\n`);
+      }
+    }
+  }
 
   if ("error" in startCommand) {
     return reportFailure(ticketId, fileName, "error", { message: startCommand.error });
@@ -1477,18 +1638,68 @@ export async function hostUploadedZip(params: {
     extractPath: detectedBotDir,
   });
 
-  const userVars = await getHostedBotEnvVars(ticketId);
+  // Apply token-alias resolution so bots using TOKEN/BOT_TOKEN work without
+  // the customer having to rename their secret.
+  const userVars = resolveTokenAlias(await getHostedBotEnvVars(ticketId));
+
+  // Also run the remaining pre-launch checks (token alias notice, etc.) now
+  // that we have the resolved env vars — skip if we already ran above.
+  {
+    const preLaunch = await analyzeAndFixBeforeLaunch({
+      projectRoot,
+      persistentDir: detectedBotDir,
+      language,
+      pkg: pkg ?? {},
+      userVars,
+      ticketId,
+    });
+    for (const fix of preLaunch.fixes) {
+      // Only log fixes that haven't already been logged above
+      if (!fix.description.includes("Pre-launch fix:")) {
+        appendLiveLog(ticketId, `[Lumora] Pre-launch: ${fix.description}\n`);
+      }
+    }
+  }
+
   const probe = await runStartupProbe(startCommand.cmd, startCommand.args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
     logger.warn(
       { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
-      "Bot crashed on startup",
+      "Bot crashed on startup — entering AI repair loop",
     );
-    const diagnosis = diagnoseBotCrash(probe.output, userVars);
+
+    // Run the known-pattern diagnosis first for a fast answer.
+    const quickDiagnosis = diagnoseBotCrash(probe.output, userVars);
+
+    // Attempt AI-powered auto-repair (up to MAX_REPAIR_ATTEMPTS times).
+    const repairOutcome = await runRepairLoop({
+      ticketId,
+      projectRoot,
+      persistentBotDir: detectedBotDir,
+      language,
+      pkg,
+      pm,
+      fileName,
+      startCmd: startCommand,
+      crashOutput: probe.output,
+      userVars,
+      onCrash,
+    });
+
+    if (repairOutcome.fixed) {
+      // Bot is now running after repair — report success.
+      return {
+        status: "running",
+        message: repairOutcome.friendlyMessage,
+        startCommand: startCommand.label,
+      };
+    }
+
+    // All repair attempts failed — report crash with the best diagnosis we have.
     return reportFailure(ticketId, fileName, "crashed", {
-      message: diagnosis ?? `The bot crashed on startup (exit code ${probe.exitCode ?? "unknown"}).`,
-      detail: diagnosis ? probe.output : undefined,
+      message: quickDiagnosis ?? repairOutcome.friendlyMessage,
+      detail: probe.output,
       startCommand: startCommand.label,
     });
   }

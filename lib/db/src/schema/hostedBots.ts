@@ -31,6 +31,9 @@ export const hostedBotsTable = pgTable("hosted_bots", {
   // and the dashboard's log viewer have something real to show even when
   // the process dies well after the initial startup probe.
   recentLog: text("recent_log").notNull().default(""),
+  // How many AI-powered auto-repair attempts were made during the last deployment.
+  // Resets to 0 on each fresh upload.
+  repairAttempts: integer("repair_attempts").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

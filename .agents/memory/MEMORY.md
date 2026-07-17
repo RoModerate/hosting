@@ -3,3 +3,4 @@
 - [Hosted bot process sandboxing](hosted-bot-sandboxing.md) — env merge order for spawning untrusted uploaded processes: strip host secrets, then let user vars win last.
 - [Crash-loop auto-restart](crash-loop-auto-restart.md) — track intentional-stop flags and use a stability-reset window so auto-restart doesn't misfire or loop forever.
 - [File manager implementation](file-manager-implementation.md) — per-bot file browser/editor: backend sandbox scoping, routes pattern, frontend tree+CodeMirror, runner build-step fix.
+- [AI repair system](ai-repair-system.md) — two-layer repair: static pre-launch + AI crash loop (max 3); runRepairLoop in runner.ts to avoid circular imports; fixes apply to both tmp+persistent dirs.
