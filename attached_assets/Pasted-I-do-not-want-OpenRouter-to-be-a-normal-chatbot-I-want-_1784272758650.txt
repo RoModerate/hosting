@@ -1,0 +1,68 @@
+I do not want OpenRouter to be a normal chatbot. I want it to function as an autonomous deployment agent inside Lumora.
+
+When a user uploads a Discord bot, the AI should automatically begin working without waiting for the user to ask questions.
+
+The AI should have access to the extracted project files, folder structure, package.json, source code, build logs, install logs, runtime logs, deployment history, environment variables (excluding secret values), and the deployment pipeline.
+
+Workflow:
+
+Analyze the uploaded project.
+Detect whether it is Node.js, TypeScript, JavaScript, Python, Discord.js, Discord.py, Eris, Sapphire, or another supported framework.
+Inspect every file for problems.
+Detect common deployment issues such as:
+missing package.json
+invalid ZIP structure
+monorepo/workspace uploads
+workspace:* dependencies
+catalog: dependencies
+missing start script
+incorrect entry point
+dependency conflicts
+unsupported package manager
+corrupted uploads
+invalid imports
+missing environment variables
+TypeScript configuration issues
+Node version incompatibilities
+syntax errors
+runtime exceptions
+missing files
+Automatically modify the extracted project files when a safe fix exists.
+Run dependency installation.
+Run build.
+Run the bot.
+Read runtime logs.
+If the bot crashes, analyze the crash logs and make another fix automatically.
+Repeat this repair cycle until the bot starts successfully or no safe automated fix exists.
+
+The AI should behave like an autonomous coding agent rather than a chatbot.
+
+Implement a tool system so OpenRouter can call internal functions such as:
+
+readFile()
+writeFile()
+createFile()
+renameFile()
+deleteFile()
+listFiles()
+searchFiles()
+installDependencies()
+buildProject()
+startBot()
+stopBot()
+restartBot()
+readLogs()
+detectFramework()
+analyzePackageJson()
+repairPackageJson()
+fixImports()
+fixStartScripts()
+repairZipStructure()
+repairWorkspaceDependencies()
+validateDeployment()
+
+OpenRouter should receive the outputs of these tools, decide what to do next, and continue automatically until deployment succeeds.
+
+Keep a knowledge base of previous deployment failures and successful fixes. Before deploying any new bot, compare it against previously solved issues and automatically apply known repairs.
+
+The user should simply upload a ZIP, click Deploy, and the AI should handle the entire deployment process with minimal manual intervention.
