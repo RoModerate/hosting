@@ -1451,76 +1451,78 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
  *
  * Fire-and-forget — never throws.
  */
-function watchForDiscordReady(ticketId: number, timeoutMs = 90_000): void {
+function watchForDiscordReady(ticketId: number, timeoutMs = 20_000): void {
   const startedAt = Date.now();
-  let scannedUpTo = 0; // track how much of the live log we've already checked
+  // Scan the full live log from the start on every poll, not just new chunks.
+  // This catches failure patterns that were logged before the watcher started
+  // (e.g. during the 8s startup probe) as well as patterns that span poll boundaries.
 
   function poll(): void {
     try {
-      const log = getLiveLog(ticketId);
-      const chunk = log.slice(scannedUpTo);
-      scannedUpTo = log.length;
+      const fullLog = getLiveLog(ticketId);
 
-      if (chunk) {
-        if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(chunk))) {
-          const match = chunk.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
-          const who = match?.[1]?.trim();
-          if (who) {
-            appendLiveLog(ticketId, `[Discord] ✓ Bot online as ${who}\n`);
-          }
-          logger.info({ ticketId, who }, "Discord client.ready detected via live log watcher");
-          db.update(hostedBotsTable)
-            .set({ status: "online", ...(who ? { botName: who } : {}) })
-            .where(eq(hostedBotsTable.ticketId, ticketId))
-            .catch((err: unknown) => logger.error({ err }, "Failed to set discord online status"));
-          return; // done
+      // ── Check for Discord online signal anywhere in the log ───────────────
+      if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(fullLog))) {
+        const match = fullLog.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
+        const who = match?.[1]?.trim();
+        if (who) {
+          appendLiveLog(ticketId, `[Discord] ✓ Bot online as ${who}\n`);
         }
-
-        if (DISCORD_FAIL_PATTERNS.some((p) => p.test(chunk))) {
-          logger.warn({ ticketId }, "Discord login failure detected via live log watcher");
-          db.update(hostedBotsTable)
-            .set({
-              status: "login_failed",
-              errorMessage:
-                "Process running but Discord connection failed. " +
-                "Check your bot token and gateway intents.",
-            })
-            .where(eq(hostedBotsTable.ticketId, ticketId))
-            .catch((err: unknown) => logger.error({ err }, "Failed to set login_failed status"));
-          return; // done
-        }
+        logger.info({ ticketId, who }, "Discord client.ready detected via live log watcher");
+        db.update(hostedBotsTable)
+          .set({ status: "online", ...(who ? { botName: who } : {}) })
+          .where(eq(hostedBotsTable.ticketId, ticketId))
+          .catch((err: unknown) => logger.error({ err }, "Failed to set discord online status"));
+        return; // done
       }
 
-      if (!isRunning(ticketId)) return; // process died — crash handler takes over
+      // ── Check for known Discord failure patterns ───────────────────────────
+      if (DISCORD_FAIL_PATTERNS.some((p) => p.test(fullLog))) {
+        logger.warn({ ticketId }, "Discord login failure detected via live log watcher");
+        db.update(hostedBotsTable)
+          .set({
+            status: "login_failed",
+            errorMessage:
+              "Discord connection failed. Check your bot token (DISCORD_TOKEN or DISCORD_BOT_TOKEN) " +
+              "and that Gateway Intents are enabled in the Discord Developer Portal.",
+          })
+          .where(eq(hostedBotsTable.ticketId, ticketId))
+          .catch((err: unknown) => logger.error({ err }, "Failed to set login_failed status"));
+        return; // done
+      }
+
+      // ── Process died — crash handler takes over ────────────────────────────
+      if (!isRunning(ticketId)) return;
+
+      // ── Watchdog timeout ───────────────────────────────────────────────────
       if (Date.now() - startedAt >= timeoutMs) {
-        logger.warn({ ticketId }, "Discord ready watcher timed out — treating as startup failure");
-        // Bot is still running but never connected — kill it so the crash handler
-        // + auto-restart pipeline can attempt an AI-powered repair.
+        logger.warn({ ticketId }, "Discord ready watcher timed out after 20s — setting crashed, NOT auto-restarting");
         appendLiveLog(
           ticketId,
-          "[Lumora] ⚠ Bot did not connect to Discord within 90 seconds.\n" +
-          "[Lumora] Collecting logs and attempting automatic repair…\n",
+          "[Lumora] ⚠ Bot did not connect to Discord within 20 seconds.\n" +
+          "[Lumora] The bot process is running but silent. Common causes:\n" +
+          "[Lumora]   • Missing or wrong DISCORD_TOKEN / DISCORD_BOT_TOKEN env var\n" +
+          "[Lumora]   • Bot code never calls client.login() or discord.run()\n" +
+          "[Lumora]   • Async startup error that doesn't crash the process\n" +
+          "[Lumora] Use the AI Assistant tab to diagnose and fix this automatically.\n",
         );
+        // Kill the silent process but do NOT schedule an auto-restart.
+        // Auto-restarting a bot with a bad token or missing login call just
+        // loops forever (starting → connecting → 20s → starting → ...).
+        // The user can see the error, use the AI chat to fix it, then restart manually.
+        stopProcess(ticketId);
         db.update(hostedBotsTable)
           .set({
             status: "crashed",
             errorMessage:
-              "The bot process started but did not connect to Discord within 90 seconds. " +
-              "This usually means the bot is stuck loading, has a missing DISCORD_TOKEN env var, " +
-              "or has an async startup error that does not crash the process. " +
-              "Lumora is attempting automatic repair.",
+              "Bot started but never connected to Discord (20s timeout). " +
+              "Most likely cause: missing or wrong DISCORD_TOKEN env var, or the bot code " +
+              "never calls client.login(). Use the AI Assistant to diagnose this.",
             recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
           })
           .where(eq(hostedBotsTable.ticketId, ticketId))
           .catch((err: unknown) => logger.error({ err }, "Failed to set watchdog-timeout status"));
-        // stopProcess sets the intentional-stop flag so the exit handler won't
-        // double-count this as a crash — we've already set status above.
-        // Clear the flag right after so auto-restart still fires.
-        stopProcess(ticketId);
-        // The process is gone now. Directly schedule an auto-restart so the
-        // repair loop (inside restartHostedBot) gets a chance to fix the bot.
-        scheduleAutoRestart(ticketId);
-        return;
+        return; // STOP — do not auto-restart
       }
 
       setTimeout(poll, 500);
