@@ -27,6 +27,18 @@ const STARTUP_PROBE_MS = 8 * 1000;
 const OUTPUT_TAIL_CHARS = 3500;
 const AUTO_RESTART_BASE_DELAY_MS = 3000;
 
+/**
+ * Isolated run directory for each hosted bot.
+ * Lives in /tmp (outside the Lumora pnpm workspace tree) so package managers
+ * can never walk up and find pnpm-workspace.yaml or catalog definitions
+ * belonging to the host platform.
+ */
+const ISOLATED_BOTS_DIR = "/tmp/lumora-bots";
+
+function isolatedBotDir(ticketId: number): string {
+  return path.join(ISOLATED_BOTS_DIR, String(ticketId));
+}
+
 export type HostStatus = "running" | "crashed" | "error";
 export type BotLanguage = "node" | "python";
 
@@ -208,6 +220,62 @@ async function stripPlatformFiles(rootDir: string, depth = 0): Promise<void> {
       await fsp.rm(full, { force: true }).catch(() => {});
     }
   }
+}
+
+/**
+ * Copies `sourceBotDir` to an isolated /tmp location so that package managers
+ * (npm, pnpm, yarn) cannot walk up the directory tree and discover the Lumora
+ * host workspace files (pnpm-workspace.yaml, catalog definitions, etc.).
+ *
+ * Additionally rewrites any `catalog:` or `workspace:` dependency versions in
+ * the bot's package.json to `*`, since those version protocols only resolve
+ * inside a parent workspace — a standalone bot cannot use them.
+ *
+ * Returns the path to the isolated copy ready for install/build/start.
+ */
+async function isolateBot(sourceBotDir: string, ticketId: number): Promise<string> {
+  const dest = isolatedBotDir(ticketId);
+  await fsp.rm(dest, { recursive: true, force: true });
+  await fsp.mkdir(dest, { recursive: true });
+  await fsp.cp(sourceBotDir, dest, { recursive: true });
+
+  // Remove workspace-root marker files that confuse package managers.
+  for (const f of ["pnpm-workspace.yaml", ".pnpmfile.cjs", "nx.json"]) {
+    await fsp.rm(path.join(dest, f), { force: true }).catch(() => {});
+  }
+
+  // Rewrite catalog:/workspace: dependency versions to "*" so the bot can be
+  // installed as a standalone project without the parent workspace catalog.
+  const pkgPath = path.join(dest, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const raw = await fsp.readFile(pkgPath, "utf-8");
+      const pkg = JSON.parse(raw) as Record<string, unknown>;
+      let dirty = false;
+
+      for (const section of [
+        "dependencies", "devDependencies", "peerDependencies", "optionalDependencies",
+      ]) {
+        const deps = pkg[section] as Record<string, string> | undefined;
+        if (!deps) continue;
+        for (const [name, ver] of Object.entries(deps)) {
+          if (
+            typeof ver === "string" &&
+            (ver.startsWith("catalog:") || ver.startsWith("workspace:"))
+          ) {
+            deps[name] = "*";
+            dirty = true;
+          }
+        }
+      }
+
+      if (dirty) {
+        await fsp.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+      }
+    } catch { /* leave as-is if package.json is malformed */ }
+  }
+
+  return dest;
 }
 
 function runStartupProbe(
@@ -1062,19 +1130,20 @@ export async function hostUploadedZip(params: {
   }
 
   // rootResult.kind === "found"
-  const { dir: projectRoot, language, pkg, hasDiscord } = rootResult.root;
+  const { dir: detectedBotDir, language, pkg, hasDiscord } = rootResult.root;
 
-  // Relative path for human-readable log messages.
-  const relRoot = path.relative(extractRoot, projectRoot) || ".";
+  // Relative path used only for human-readable log messages (before isolation).
+  const relRoot = path.relative(extractRoot, detectedBotDir) || ".";
   const discordNote = hasDiscord
     ? language === "node" ? " (discord.js detected)" : " (discord.py detected)"
     : " ⚠ no Discord library detected in dependencies";
 
-  logger.info({ ticketId, projectRoot, language, hasDiscord }, "Bot project root detected");
+  logger.info({ ticketId, detectedBotDir, language, hasDiscord }, "Bot project root detected");
   appendLiveLog(
     ticketId,
-    `[Lumora] Bot root: ${relRoot}${discordNote}\n` +
-    `[Lumora] Language: ${language === "node" ? "Node.js" : "Python"}\n`,
+    `[Lumora] Selected bot       : ${path.basename(detectedBotDir)}\n` +
+    `[Lumora] Bot root           : ${relRoot}${discordNote}\n` +
+    `[Lumora] Language           : ${language === "node" ? "Node.js" : "Python"}\n`,
   );
 
   // If no Discord library was found in package.json / requirements.txt,
@@ -1083,7 +1152,7 @@ export async function hostUploadedZip(params: {
   let discordConfirmed = hasDiscord;
   if (!discordConfirmed) {
     appendLiveLog(ticketId, "[Lumora] No Discord lib in deps — scanning source files…\n");
-    discordConfirmed = await scanSourceFilesForDiscord(projectRoot);
+    discordConfirmed = await scanSourceFilesForDiscord(detectedBotDir);
     if (discordConfirmed) {
       appendLiveLog(ticketId, "[Lumora] Discord usage found in source files ✓\n");
     }
@@ -1103,45 +1172,45 @@ export async function hostUploadedZip(params: {
     });
   }
 
+  // ── Bot isolation ───────────────────────────────────────────────────────
+  // Copy the detected bot folder to a fully isolated /tmp location so that
+  // npm/pnpm/yarn cannot walk up the directory tree and discover Lumora's own
+  // workspace files (pnpm-workspace.yaml, catalog definitions, etc.).
+  // Also rewrites any catalog:/workspace: dep versions to "*" so install works
+  // without the parent workspace context.
+  appendLiveLog(ticketId, "[Lumora] Isolating bot into clean build directory…\n");
+  const projectRoot = await isolateBot(detectedBotDir, ticketId);
+  logger.info({ ticketId, detectedBotDir, projectRoot }, "Bot isolated to tmp directory");
+
   const pm: PackageManager | null = language === "node"
     ? detectPackageManager(projectRoot, pkg!)
     : null;
 
-  if (pm) {
-    appendLiveLog(ticketId, `[Lumora] Package manager: ${pm}\n`);
-  }
-
   await updateHostedBot(ticketId, { language });
 
   // ── Dependency installation ─────────────────────────────────────────────
-  // Log all critical details before any subprocess is launched so a mis-routed
-  // process is immediately visible in the live log.
   const pkgJsonPath = language === "node" ? path.join(projectRoot, "package.json") : null;
   appendLiveLog(
     ticketId,
-    `[Lumora] Selected bot path  : ${projectRoot}\n` +
-    `[Lumora] Working directory  : ${projectRoot}\n` +
+    `[Lumora] Bot root           : ${projectRoot}\n` +
+    `[Lumora] Package manager    : ${pm ?? "pip"}\n` +
     (pkgJsonPath ? `[Lumora] Using package.json : ${pkgJsonPath}\n` : ""),
   );
   logger.info(
-    { ticketId, projectRoot, pkgJsonPath, language },
-    "Bot runner: resolved project root and package.json",
+    { ticketId, projectRoot, pkgJsonPath, pm, language },
+    "Bot runner: starting dependency installation",
   );
 
   let install: { exitedCleanly: boolean; exitCode: number | null; output: string };
   if (language === "node") {
-    appendLiveLog(ticketId, `[Lumora] Running ${pm} install…\n`);
-    // --ignore-workspace prevents pnpm from walking up to the Lumora host
-    // workspace root (pnpm-workspace.yaml) and treating the bot as a member
-    // package, which would cause it to run host scripts or fail with host-only
-    // env-var requirements (e.g. DATABASE_URL).
     const installArgs =
-      pm === "pnpm" ? ["install", "--no-frozen-lockfile", "--ignore-workspace"] :
+      pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
       pm === "yarn" ? ["install", "--non-interactive"] :
       ["install", "--no-audit", "--no-fund"];
+    appendLiveLog(ticketId, `[Lumora] Install command     : ${pm} ${installArgs.join(" ")}\n`);
     install = await runCommand(pm!, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
   } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
-    appendLiveLog(ticketId, "[Lumora] Running pip install -r requirements.txt…\n");
+    appendLiveLog(ticketId, `[Lumora] Install command     : ${PYTHON_BIN} ${PIP_INSTALL_ARGS.join(" ")}\n`);
     install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
   } else {
     // No requirements.txt — nothing to install.
@@ -1165,13 +1234,7 @@ export async function hostUploadedZip(params: {
     const scripts = (pkg!["scripts"] ?? {}) as Record<string, string>;
     if (typeof scripts["build"] === "string") {
       logger.info({ ticketId }, "Running build script before start");
-      appendLiveLog(ticketId, `[Lumora] Running ${pm} run build…\n`);
-      // --ignore-workspace prevents pnpm from treating the bot as part of the
-      // Lumora host workspace when running the build step.
-      const buildArgs = pm === "pnpm"
-        ? ["run", "build", "--ignore-workspace"]
-        : ["run", "build"];
-      const build = await runCommand(pm!, buildArgs, projectRoot, INSTALL_TIMEOUT_MS);
+      const build = await runCommand(pm!, ["run", "build"], projectRoot, INSTALL_TIMEOUT_MS);
       if (!build.exitedCleanly) {
         return reportFailure(ticketId, fileName, "error", {
           message: 'The build step ("build" script in package.json) failed.',
@@ -1201,11 +1264,13 @@ export async function hostUploadedZip(params: {
     "Bot runner: launching bot process",
   );
 
-  // Store the actual project root (may be a subdirectory of extractRoot) so restarts work.
+  // Store detectedBotDir (the persistent original location within storage/)
+  // as extractPath so restarts can recover after a server restart by
+  // re-isolating from it. The tmp dir (projectRoot) is ephemeral.
   await updateHostedBot(ticketId, {
     status: "starting",
     startCommand: startCommand.label,
-    extractPath: projectRoot,
+    extractPath: detectedBotDir,
   });
 
   const userVars = await getHostedBotEnvVars(ticketId);
@@ -1252,10 +1317,59 @@ export async function restartHostedBot(
   stopProcess(ticketId);
   if (!opts?.isAutoRestart) resetAutoRestartAttempts(ticketId);
 
-  const projectRoot = row.extractPath;
-  if (!fs.existsSync(projectRoot)) {
+  // row.extractPath is the persistent original bot dir (inside storage/).
+  // The actual run directory is the isolated /tmp copy. Re-isolate if it's
+  // gone (e.g. after a server restart that wiped /tmp).
+  const originalBotDir = row.extractPath;
+  if (!fs.existsSync(originalBotDir)) {
     const message = "The previously extracted files are missing. Please re-upload the ZIP file.";
     return reportFailure(ticketId, row.fileName, "error", { message });
+  }
+
+  const tmpRoot = isolatedBotDir(ticketId);
+  let projectRoot = tmpRoot;
+
+  if (!fs.existsSync(tmpRoot)) {
+    // /tmp was wiped (server restart). Re-isolate from the persistent copy.
+    appendLiveLog(ticketId, "[Lumora] Restoring isolated build directory…\n");
+    try {
+      projectRoot = await isolateBot(originalBotDir, ticketId);
+      // Re-install dependencies since node_modules was in the tmp dir.
+      const [row2] = await db.select().from(hostedBotsTable).where(eq(hostedBotsTable.ticketId, ticketId));
+      const lang = row2?.language ?? "node";
+      if (lang === "node") {
+        const pkgRaw = fs.existsSync(path.join(projectRoot, "package.json"))
+          ? fs.readFileSync(path.join(projectRoot, "package.json"), "utf-8") : "{}";
+        const pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
+        const pm = detectPackageManager(projectRoot, pkg);
+        const installArgs = pm === "pnpm" ? ["install", "--no-frozen-lockfile"]
+          : pm === "yarn" ? ["install", "--non-interactive"]
+          : ["install", "--no-audit", "--no-fund"];
+        appendLiveLog(ticketId, `[Lumora] Re-installing dependencies (${pm} ${installArgs.join(" ")})…\n`);
+        const install = await runCommand(pm, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
+        if (!install.exitedCleanly) {
+          return reportFailure(ticketId, row.fileName, "error", {
+            message: "Dependency re-installation failed after server restart.",
+            detail: install.output,
+          });
+        }
+      } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
+        appendLiveLog(ticketId, "[Lumora] Re-installing Python dependencies…\n");
+        const install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
+        if (!install.exitedCleanly) {
+          return reportFailure(ticketId, row.fileName, "error", {
+            message: "Python dependency re-installation failed after server restart.",
+            detail: install.output,
+          });
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reportFailure(ticketId, row.fileName, "error", {
+        message: "Failed to restore the bot's isolated build directory.",
+        detail: msg,
+      });
+    }
   }
 
   const [cmd, ...args] = row.startCommand.split(" ");
