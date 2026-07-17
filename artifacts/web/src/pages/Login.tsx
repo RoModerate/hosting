@@ -42,6 +42,7 @@ export default function Login() {
 
   const [mode, setMode] = useState<'discord' | 'key'>('discord');
   const [discordLoading, setDiscordLoading] = useState(false);
+  const [discordError, setDiscordError] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
 
   const form = useForm<RedeemFormValues>({
@@ -53,8 +54,8 @@ export default function Login() {
 
   const handleDiscordLogin = async () => {
     setDiscordLoading(true);
+    setDiscordError(null);
     try {
-      // Build the redirect URI for this page
       const redirectUri = window.location.origin + (import.meta.env.BASE_URL?.replace(/\/$/, '') || '') + '/auth/discord/callback';
       const res = await fetch(`${BASE}/api/auth/discord/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
       if (!res.ok) {
@@ -65,9 +66,7 @@ export default function Login() {
       window.location.href = url;
     } catch (err: any) {
       setDiscordLoading(false);
-      // If not configured, show message
-      console.error('Discord login error:', err?.message);
-      // Fall through to key mode if not configured
+      setDiscordError(err?.message || 'Discord login failed. Please try again or use an access key.');
     }
   };
 
@@ -112,7 +111,7 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center space-y-3">
           <div className="flex justify-center mb-5">
-            <img src="/lumora-icon.png" alt="Lumora" className="h-24 w-24 object-contain drop-shadow-[0_0_20px_rgba(99,102,241,0.25)]" />
+            <img src="/lumora-brand.png" alt="Lumora" className="h-24 w-24 object-contain drop-shadow-[0_0_20px_rgba(99,102,241,0.25)]" />
           </div>
           <h1 className="text-3xl font-mono font-bold tracking-[0.15em] text-white" style={{ textShadow: '0 0 30px rgba(99,102,241,0.3)' }}>
             LUMORA
@@ -162,6 +161,13 @@ export default function Login() {
                 )}
                 {discordLoading ? 'Redirecting to Discord…' : 'Continue with Discord'}
               </button>
+
+              {discordError && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06]">
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-400/70 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-mono text-red-300/70 leading-relaxed">{discordError}</p>
+                </div>
+              )}
 
               <div className="relative flex items-center gap-3">
                 <div className="flex-1 h-px bg-white/[0.06]" />
