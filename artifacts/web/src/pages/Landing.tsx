@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import {
   Github, Shield, Activity, RotateCw, Bot, ChevronRight,
-  MessageSquare, Terminal, Zap, ArrowRight, Sparkles,
+  MessageSquare, Terminal, Zap, ArrowRight,
 } from 'lucide-react';
 
 const DISCORD_INVITE = 'https://discord.gg/4wEKPrgZmD';
@@ -64,9 +64,7 @@ export default function Landing() {
       {/* ─── Nav ─── */}
       <nav className="sticky top-0 z-30 flex items-center justify-between h-14 px-6 md:px-12 border-b border-white/[0.05] bg-[#080810]/80 backdrop-blur-xl">
         <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-[#6366f1]/20 border border-[#6366f1]/30 flex items-center justify-center">
-            <img src="/lumora-icon.png" alt="Lumora" className="h-4 w-4 object-contain" />
-          </div>
+          <img src="/lumora-icon.png" alt="Lumora" className="h-7 w-7 object-contain" />
           <span className="font-mono font-bold text-sm tracking-[0.15em] text-white">LUMORA</span>
         </div>
 
@@ -87,7 +85,7 @@ export default function Landing() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setLocation('/login')}
-            className="px-4 py-1.5 text-sm text-white/40 hover:text-white/70 transition-colors duration-200 font-medium"
+            className="px-4 py-1.5 text-sm font-semibold text-[#6366f1] border border-[#6366f1]/30 rounded-lg hover:bg-[#6366f1]/10 transition-all duration-200"
           >
             Login
           </button>
@@ -105,11 +103,6 @@ export default function Landing() {
       <section className="max-w-6xl mx-auto px-6 md:px-12 pt-28 pb-24 flex flex-col lg:flex-row items-center gap-20">
         {/* Copy */}
         <div className="flex-1 lg:max-w-[520px]">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#6366f1]/20 bg-[#6366f1]/[0.06] text-xs font-mono text-[#a5b4fc] mb-8">
-            <Sparkles className="h-3 w-3" />
-            Discord bot hosting platform
-          </div>
-
           <h1 className="text-5xl md:text-6xl font-bold text-white leading-[1.08] tracking-tight mb-6">
             Your bot stays
             <br />

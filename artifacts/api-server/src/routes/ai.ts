@@ -2,13 +2,40 @@ import { Router, type IRouter } from "express";
 import { clearSessionCookie, resolveSession } from "../lib/session";
 import { getLiveLog } from "../discord/hosting/processManager";
 import { getHostedBotStatus, restartHostedBot, updateHostedBot } from "../discord/hosting/runner";
-import { writeFileContent } from "../discord/hosting/fileManager";
+import {
+  writeFileContent,
+  readFileContent,
+  listDirectory,
+  deletePath,
+  resolveBotPath,
+  FileManagerSecurityError,
+  FileManagerError,
+} from "../discord/hosting/fileManager";
 import { logger } from "../lib/logger";
+import fs from "node:fs";
 
 const router: IRouter = Router();
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
+
+// ─── In-memory undo stack per ticket ─────────────────────────────────────────
+// Stores the last content of a file before each write so the AI can undo it.
+
+const undoStack = new Map<number, Array<{ path: string; content: string }>>();
+
+function pushUndo(ticketId: number, path: string, content: string) {
+  if (!undoStack.has(ticketId)) undoStack.set(ticketId, []);
+  const stack = undoStack.get(ticketId)!;
+  stack.push({ path, content });
+  if (stack.length > 20) stack.shift();
+}
+
+function popUndo(ticketId: number): { path: string; content: string } | null {
+  const stack = undoStack.get(ticketId);
+  if (!stack || stack.length === 0) return null;
+  return stack.pop()!;
+}
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
@@ -18,14 +45,13 @@ const AI_TOOLS = [
     function: {
       name: "write_file",
       description:
-        "Write or overwrite a file in the user's bot project. Use this to apply code fixes directly. Always write the complete file content.",
+        "Write or overwrite a file in the user's bot project. Use to apply code fixes. Always write the complete file content. The previous content is saved automatically for undo.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description:
-              "Relative file path within the bot project (e.g. 'index.js', 'src/bot.py', 'package.json'). No leading slash.",
+            description: "Relative file path within the bot project (e.g. 'index.js', 'src/bot.py'). No leading slash.",
           },
           content: {
             type: "string",
@@ -43,9 +69,74 @@ const AI_TOOLS = [
   {
     type: "function",
     function: {
-      name: "restart_bot",
+      name: "read_file",
+      description: "Read the current content of a file in the user's bot project.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Relative file path to read (e.g. 'index.js', 'config.json').",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description: "List files and directories in the user's bot project. Use to explore the project structure.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Directory to list. Use '' or '.' for the project root.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_file",
+      description: "Delete a file or empty directory from the user's bot project.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Relative file path to delete.",
+          },
+          reason: {
+            type: "string",
+            description: "Short reason for deletion.",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "undo_last_change",
       description:
-        "Restart the bot process to apply file changes. Call this after writing fixes so the changes take effect.",
+        "Undo the last write_file change by restoring the previous file content. Can be called multiple times to undo multiple changes.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "restart_bot",
+      description: "Restart the bot process to apply file changes. Always call this after writing fixes.",
       parameters: {
         type: "object",
         properties: {
@@ -72,15 +163,88 @@ async function executeTool(
       const content = args["content"];
       if (!filePath || content === undefined) return "Error: path and content are required.";
 
-      // Security: block path traversal
       if (filePath.includes("..") || filePath.startsWith("/")) {
         return `Error: Invalid path "${filePath}".`;
       }
 
+      // Save old content for undo before overwriting
+      try {
+        const existing = await readFileContent(ticketId, filePath);
+        pushUndo(ticketId, filePath, existing.content);
+      } catch {
+        // File doesn't exist yet — push empty string as undo target
+        pushUndo(ticketId, filePath, "");
+      }
+
       await writeFileContent(ticketId, filePath, content);
-      const reason = args["reason"] ? ` (${args["reason"]})` : "";
+      const reason = args["reason"] ? ` — ${args["reason"]}` : "";
       logger.info({ ticketId, filePath }, "AI agent wrote file fix");
       return `✓ Wrote ${filePath}${reason}`;
+    }
+
+    if (name === "read_file") {
+      const filePath = args["path"]?.replace(/^\/+/, "");
+      if (!filePath) return "Error: path is required.";
+
+      if (filePath.includes("..") || filePath.startsWith("/")) {
+        return `Error: Invalid path "${filePath}".`;
+      }
+
+      const result = await readFileContent(ticketId, filePath);
+      const preview = result.content.slice(0, 4000);
+      const truncated = result.content.length > 4000 ? `\n... (truncated, ${result.content.length} bytes total)` : "";
+      return `\`\`\`\n${preview}${truncated}\n\`\`\``;
+    }
+
+    if (name === "list_files") {
+      const dirPath = args["path"] || ".";
+      const entries = await listDirectory(ticketId, dirPath === "." ? "" : dirPath);
+
+      if (entries.length === 0) return "(empty directory)";
+
+      const lines = entries.map((e) => {
+        const icon = e.type === "directory" ? "📁" : "📄";
+        const size = e.type === "file" ? ` (${(e.size / 1024).toFixed(1)} KB)` : "";
+        return `${icon} ${e.path}${size}`;
+      });
+      return lines.join("\n");
+    }
+
+    if (name === "delete_file") {
+      const filePath = args["path"]?.replace(/^\/+/, "");
+      if (!filePath) return "Error: path is required.";
+
+      if (filePath.includes("..") || filePath.startsWith("/")) {
+        return `Error: Invalid path "${filePath}".`;
+      }
+
+      // Back up before deleting
+      try {
+        const existing = await readFileContent(ticketId, filePath);
+        pushUndo(ticketId, filePath, existing.content);
+      } catch { /* ignore */ }
+
+      await deletePath(ticketId, filePath);
+      const reason = args["reason"] ? ` — ${args["reason"]}` : "";
+      return `✓ Deleted ${filePath}${reason}`;
+    }
+
+    if (name === "undo_last_change") {
+      const entry = popUndo(ticketId);
+      if (!entry) return "Nothing to undo — no previous changes recorded this session.";
+
+      if (entry.content === "") {
+        // File was newly created — delete it to undo
+        try {
+          await deletePath(ticketId, entry.path);
+          return `✓ Undid creation of ${entry.path} (file deleted).`;
+        } catch {
+          return `Could not undo — ${entry.path} may already be gone.`;
+        }
+      }
+
+      await writeFileContent(ticketId, entry.path, entry.content);
+      return `✓ Restored ${entry.path} to its previous state.`;
     }
 
     if (name === "restart_bot") {
@@ -89,14 +253,14 @@ async function executeTool(
         errorMessage: null,
         aiExplanation: null,
       });
-
-      // Fire restart in background — don't await so the response comes back fast
       restartHostedBot(ticketId, () => undefined).catch(() => undefined);
       return "✓ Bot restart initiated — it will be online in a moment.";
     }
 
     return `Unknown tool: ${name}`;
   } catch (err: any) {
+    if (err instanceof FileManagerSecurityError) return `Security error: ${err.message}`;
+    if (err instanceof FileManagerError) return `File error: ${err.message}`;
     logger.error({ err, tool: name, ticketId }, "AI tool execution failed");
     return `Error executing ${name}: ${err?.message || "Unknown error"}`;
   }
@@ -123,6 +287,24 @@ router.post("/ai/chat", async (req, res) => {
 
   const apiKey = process.env["OPENROUTER_API_KEY"];
   if (!apiKey) {
+    // Try getting it from DB config
+    const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
+    if (!row) {
+      res.status(503).json({ error: "AI assistant is not configured on this server. Set OPENROUTER_API_KEY in the admin panel." });
+      return;
+    }
+  }
+
+  const resolvedApiKey = apiKey || await (async () => {
+    const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
+    return row?.value;
+  })();
+
+  if (!resolvedApiKey) {
     res.status(503).json({ error: "AI assistant is not configured on this server." });
     return;
   }
@@ -150,29 +332,39 @@ router.post("/ai/chat", async (req, res) => {
     ? `\nRecent console output (last 1500 chars):\n\`\`\`\n${liveLog.slice(-1500)}\n\`\`\``
     : "";
 
-  const systemPrompt = `You are Lumora AI — a technical assistant and autonomous agent embedded in the Lumora Discord bot hosting portal.
+  const systemPrompt = `You are Lumora AI — an autonomous coding agent embedded in the Lumora Discord bot hosting portal.
 
 ## Current Bot Context
 ${botContext}${consoleContext}
 
 ## Your Capabilities
-You have access to tools that let you directly fix the user's bot:
-- **write_file**: Write or overwrite any file in the bot project to apply code fixes
+You have full access to the user's bot project files:
+- **read_file**: Read any file to understand the code
+- **list_files**: List files/directories to explore the project structure
+- **write_file**: Write or overwrite files to apply fixes (previous content is automatically saved for undo)
+- **delete_file**: Delete files that are no longer needed
+- **undo_last_change**: Restore a file to its state before the last write_file or delete_file call
 - **restart_bot**: Restart the bot process to apply changes
 
-When a user asks you to fix something:
-1. Diagnose the issue from the logs/context
-2. Use write_file to apply the fix
-3. Use restart_bot to restart and apply it
-4. Explain what you did in your final message
+## Workflow
+When a user asks you to fix, modify, or create something:
+1. If you need to understand the code first, use read_file or list_files
+2. Apply fixes with write_file (always write complete file content, never partial)
+3. Use restart_bot after writing fixes so changes take effect
+4. Explain what you did and why
+
+When a user asks you to undo:
+1. Call undo_last_change to restore the previous file state
+2. Use restart_bot to apply the restored state
+3. Confirm what was undone
 
 ## Rules
-- Be concise and direct — skip preamble, get to the fix
-- When you see an error in the logs, diagnose it and offer to fix it (or just fix it if asked)
-- Use code blocks when showing code
-- Never expose token/secret values
-- Only fix files that exist or that you're clearly creating from scratch
+- Be concise and direct — get to the fix without preamble
+- Always write complete file content in write_file, never just a snippet
+- Use code blocks when showing code in chat
+- Never expose token/secret values even if you see them in files
 - After writing fixes, always restart the bot
+- When exploring a project for the first time, start with list_files to understand the structure
 - Supported runtimes: Node.js (discord.js, Eris, Sapphire), Python (discord.py, py-cord, hikari, disnake), Java (JDA, Javacord, D4J)`;
 
   const ticketId = session.ticket.id;
@@ -182,7 +374,7 @@ When a user asks you to fix something:
     const firstRes = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${resolvedApiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://lumora.host",
         "X-Title": "Lumora Portal AI",
@@ -199,7 +391,7 @@ When a user asks you to fix something:
         tools: AI_TOOLS,
         tool_choice: "auto",
         temperature: 0.2,
-        max_tokens: 1200,
+        max_tokens: 1500,
       }),
     });
 
@@ -260,7 +452,7 @@ When a user asks you to fix something:
     const secondRes = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${resolvedApiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://lumora.host",
         "X-Title": "Lumora Portal AI",
@@ -276,12 +468,11 @@ When a user asks you to fix something:
           ...toolMessages,
         ],
         temperature: 0.2,
-        max_tokens: 800,
+        max_tokens: 1000,
       }),
     });
 
     if (!secondRes.ok) {
-      // Tool calls succeeded but follow-up failed — return summary of what was done
       const summary = toolResults.map((r) => `${r.result}`).join("\n");
       res.json({ content: summary, toolResults });
       return;

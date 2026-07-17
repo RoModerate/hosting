@@ -35,11 +35,17 @@ export default function DiscordCallback() {
           setLocation('/dashboard');
           return;
         }
-        const data = await res.json().catch(() => ({})) as { error?: string };
+        const data = await res.json().catch(() => ({})) as {
+          error?: string;
+          discord?: { id?: string; username?: string };
+        };
         const errCode = data.error === 'no_ticket' ? 'no_ticket'
           : data.error === 'key_expired' ? 'key_expired'
           : 'oauth_failed';
-        setLocation(`/login?error=${errCode}`);
+        const params = new URLSearchParams({ error: errCode });
+        if (data.discord?.id) params.set('discord_id', data.discord.id);
+        if (data.discord?.username) params.set('discord_user', data.discord.username);
+        setLocation(`/login?${params.toString()}`);
       })
       .catch(() => {
         setLocation('/login?error=oauth_failed');

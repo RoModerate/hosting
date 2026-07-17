@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import {
   Lock, ShieldAlert, Bot, Settings2, CheckCircle2, XCircle,
   Save, Key, Plus, Copy, RefreshCw, Loader2, Eye, EyeOff,
-  MessageSquare, ChevronRight, ArrowLeft, Trash2,
+  MessageSquare, ChevronRight, ArrowLeft, Trash2, Users, Link, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,6 +42,20 @@ interface GeneratedKey {
   key: string;
   durationDays: number;
   createdAt: string;
+}
+
+interface TicketEntry {
+  id: number;
+  ownerId: string;
+  ownerUsername: string;
+  status: string;
+  keys: Array<{
+    id: number;
+    key: string;
+    status: string;
+    expiresAt: string | null;
+    hostingDurationDays: number | null;
+  }>;
 }
 
 function StatusDot({ ok }: { ok: boolean }) {
@@ -174,6 +188,251 @@ function KeyGenerator({ adminPassword }: { adminPassword: string }) {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Ticket Manager ───────────────────────────────────────────────────────────
+function TicketManager({ adminPassword }: { adminPassword: string }) {
+  const [tickets, setTickets] = useState<TicketEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [linkingId, setLinkingId] = useState<number | null>(null);
+  const [linkDiscordId, setLinkDiscordId] = useState('');
+  const [linkDiscordUser, setLinkDiscordUser] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [genDiscordId, setGenDiscordId] = useState('');
+  const [genDiscordUser, setGenDiscordUser] = useState('');
+  const [genDays, setGenDays] = useState(30);
+  const [generating, setGenerating] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const fetchTickets = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${BASE}/api/admin/tickets`, {
+        headers: { 'x-admin-password': adminPassword },
+      });
+      if (!r.ok) throw new Error('Failed to fetch tickets');
+      const data = await r.json() as { tickets: TicketEntry[] };
+      setTickets(data.tickets);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load tickets');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchTickets(); }, []);
+
+  const handleLink = async (ticketId: number) => {
+    if (!linkDiscordId.trim()) return;
+    setLinking(true);
+    try {
+      const r = await fetch(`${BASE}/api/admin/tickets/${ticketId}/link`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ discordUserId: linkDiscordId.trim(), discordUsername: linkDiscordUser.trim() || undefined }),
+      });
+      if (!r.ok) throw new Error('Failed to link');
+      toast.success('Discord ID linked successfully');
+      setLinkingId(null);
+      setLinkDiscordId('');
+      setLinkDiscordUser('');
+      fetchTickets();
+    } catch (e: any) {
+      toast.error(e?.message || 'Link failed');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleGenerateForUser = async () => {
+    if (!genDiscordId.trim()) { toast.error('Enter a Discord ID first'); return; }
+    setGenerating(true);
+    try {
+      const r = await fetch(`${BASE}/api/admin/keys/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ hostingDurationDays: genDays, discordUserId: genDiscordId.trim(), discordUsername: genDiscordUser.trim() || undefined }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})) as any; throw new Error(d?.error || 'Failed'); }
+      const data = await r.json() as { key: string };
+      navigator.clipboard?.writeText(data.key);
+      setCopiedKey(data.key);
+      toast.success('Key generated and copied!');
+      setGenDiscordId('');
+      setGenDiscordUser('');
+      fetchTickets();
+      setTimeout(() => setCopiedKey(null), 3000);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to generate key');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = (key: string) => {
+    navigator.clipboard?.writeText(key);
+    setCopiedKey(key);
+    toast.success('Copied!');
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Issue key to Discord user */}
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/[0.05] flex items-center gap-3">
+          <div className="h-8 w-8 rounded-xl bg-[#6366f1]/10 border border-[#6366f1]/20 flex items-center justify-center">
+            <Key className="h-4 w-4 text-[#6366f1]/70" />
+          </div>
+          <div>
+            <h3 className="font-mono text-sm text-white/80 font-semibold">Issue Key to Discord User</h3>
+            <p className="text-[11px] text-white/30 mt-0.5">Creates a ticket + key linked to their Discord ID</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono text-white/35 tracking-wider">DISCORD USER ID *</label>
+              <input
+                value={genDiscordId}
+                onChange={(e) => setGenDiscordId(e.target.value)}
+                placeholder="123456789012345678"
+                className="w-full bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono text-white/35 tracking-wider">USERNAME (OPTIONAL)</label>
+              <input
+                value={genDiscordUser}
+                onChange={(e) => setGenDiscordUser(e.target.value)}
+                placeholder="username"
+                className="w-full bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {[7, 14, 30, 60, 90].map((d) => (
+              <button key={d} onClick={() => setGenDays(d)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${genDays === d ? 'border-[#6366f1]/40 bg-[#6366f1]/10 text-[#6366f1]/80' : 'border-white/[0.07] text-white/35 hover:border-white/[0.14] hover:text-white/60'}`}>
+                {d}d
+              </button>
+            ))}
+            <input type="number" value={genDays} onChange={(e) => setGenDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
+              className="w-16 bg-white/[0.03] border border-white/[0.07] rounded-lg px-2 py-1.5 font-mono text-xs text-white/65 text-center focus:outline-none focus:border-[#6366f1]/30" min={1} max={365} />
+          </div>
+          {copiedKey && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <code className="flex-1 font-mono text-xs text-emerald-400/90 tracking-wider truncate">{copiedKey}</code>
+              <span className="text-[10px] font-mono text-emerald-400/50">copied!</span>
+            </div>
+          )}
+          <button onClick={handleGenerateForUser} disabled={generating || !genDiscordId.trim()}
+            className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-semibold bg-[#6366f1] hover:bg-[#7577f3] text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Plus className="h-4 w-4" /> Generate &amp; Copy Key</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Tickets list */}
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center">
+              <Users className="h-4 w-4 text-white/40" />
+            </div>
+            <div>
+              <h3 className="font-mono text-sm text-white/80 font-semibold">All Tickets</h3>
+              <p className="text-[11px] text-white/30 mt-0.5">{tickets.length} ticket{tickets.length !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+          <button onClick={fetchTickets} disabled={loading}
+            className="p-2 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all disabled:opacity-40">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-12">
+            <Loader2 className="h-4 w-4 text-white/20 animate-spin" />
+            <span className="text-xs font-mono text-white/20">Loading…</span>
+          </div>
+        ) : tickets.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <Users className="h-8 w-8 text-white/10" />
+            <p className="text-xs font-mono text-white/20">No tickets yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {tickets.map((ticket) => {
+              const activeKey = ticket.keys.find(k => k.status === 'active');
+              const isLinking = linkingId === ticket.id;
+              const isUnassigned = ticket.ownerId.startsWith('unassigned-');
+              return (
+                <div key={ticket.id} className="px-5 py-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-white/50">#{ticket.id}</span>
+                        {isUnassigned ? (
+                          <span className="text-[10px] font-mono text-yellow-400/60 bg-yellow-500/[0.08] border border-yellow-500/15 rounded px-1.5 py-0.5">Unlinked</span>
+                        ) : (
+                          <span className="font-mono text-xs text-white/70">{ticket.ownerUsername}</span>
+                        )}
+                        {activeKey ? (
+                          <span className="text-[10px] font-mono text-emerald-400/70 bg-emerald-500/[0.08] border border-emerald-500/15 rounded px-1.5 py-0.5">Active key</span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-white/20 border border-white/[0.06] rounded px-1.5 py-0.5">No key</span>
+                        )}
+                      </div>
+                      {!isUnassigned && (
+                        <div className="text-[10px] font-mono text-white/25 mt-0.5">ID: {ticket.ownerId}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {activeKey && (
+                        <button onClick={() => handleCopy(activeKey.key)}
+                          className={`p-1.5 rounded-lg transition-all ${copiedKey === activeKey.key ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/25 hover:text-white/60 hover:bg-white/[0.04]'}`}
+                          title="Copy key">
+                          {copiedKey === activeKey.key ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                      <button onClick={() => { setLinkingId(isLinking ? null : ticket.id); setLinkDiscordId(''); setLinkDiscordUser(''); }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-all ${isLinking ? 'border-[#6366f1]/30 bg-[#6366f1]/10 text-[#6366f1]/70' : 'border-white/[0.07] text-white/35 hover:border-white/[0.14] hover:text-white/60'}`}>
+                        <Link className="h-3 w-3" />
+                        {isLinking ? 'Cancel' : 'Link ID'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isLinking && (
+                    <div className="flex gap-2 items-center pt-1">
+                      <input
+                        value={linkDiscordId}
+                        onChange={(e) => setLinkDiscordId(e.target.value)}
+                        placeholder="Discord User ID"
+                        className="flex-1 bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
+                      />
+                      <input
+                        value={linkDiscordUser}
+                        onChange={(e) => setLinkDiscordUser(e.target.value)}
+                        placeholder="username"
+                        className="w-28 bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
+                      />
+                      <button onClick={() => handleLink(ticket.id)} disabled={linking || !linkDiscordId.trim()}
+                        className="shrink-0 h-9 px-3 rounded-xl text-xs font-mono font-semibold bg-[#6366f1] hover:bg-[#7577f3] text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                        {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
