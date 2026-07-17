@@ -4,6 +4,7 @@ import hostingRouter from "./hosting";
 import adminRouter from "./admin";
 import filesRouter from "./files";
 import githubRouter from "./github";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(hostingRouter);
 router.use(adminRouter);
 router.use(filesRouter);
 router.use(githubRouter);
+router.use(aiRouter);
 
 export default router;

@@ -24,6 +24,7 @@ import {
   updateHostedBot,
   type HostResult,
 } from "../discord/hosting/runner";
+import { getLiveLog } from "../discord/hosting/processManager";
 import { formatResultMessage } from "../discord/resultFormat";
 import { notifyTicketChannel } from "../discord/notify";
 import {
@@ -396,6 +397,17 @@ router.post("/bots/restart", async (req, res) => {
       logger.error({ err, ticketId }, "Background restart failed");
     }
   });
+});
+
+router.get("/bots/logs", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "No active session." });
+    return;
+  }
+  const log = getLiveLog(session.ticket.id);
+  res.json({ log });
 });
 
 router.delete("/bots", async (req, res) => {

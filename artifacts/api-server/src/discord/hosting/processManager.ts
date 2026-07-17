@@ -55,13 +55,9 @@ export function stopProcess(ticketId: number): void {
   const proc = runningProcesses.get(ticketId);
   if (proc && proc.child.exitCode === null && !proc.child.killed) {
     intentionalStops.add(ticketId);
-    proc.child.kill("SIGTERM");
-    // Give it a moment, then force-kill if it's still hanging around.
-    setTimeout(() => {
-      if (proc.child.exitCode === null && !proc.child.killed) {
-        proc.child.kill("SIGKILL");
-      }
-    }, 5000);
+    // Hard-kill immediately — Discord bots don't need graceful shutdown,
+    // and users expect the stop to take effect at once.
+    proc.child.kill("SIGKILL");
   }
   runningProcesses.delete(ticketId);
   clearStabilityTimer(ticketId);
