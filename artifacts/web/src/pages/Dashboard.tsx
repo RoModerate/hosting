@@ -413,9 +413,7 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
           <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
               {m.role === 'assistant' && (
-                <div className="h-5 w-5 rounded-lg overflow-hidden shrink-0 mt-0.5 mr-2 border border-white/10 bg-[#6366f1]/15">
-                  <img src="/lumora-icon.png" alt="" className="h-full w-full object-contain" />
-                </div>
+                <img src="/lumora-brand.png" alt="" className="h-5 w-5 object-contain shrink-0 mt-0.5 mr-2" />
               )}
               <div className={`max-w-[85%] rounded-xl px-3 py-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words ${
                 m.role === 'user'
@@ -439,9 +437,7 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="h-5 w-5 rounded-lg overflow-hidden shrink-0 mt-0.5 mr-2 border border-white/10 bg-[#6366f1]/15">
-              <img src="/lumora-icon.png" alt="" className="h-full w-full object-contain" />
-            </div>
+            <img src="/lumora-brand.png" alt="" className="h-5 w-5 object-contain shrink-0 mt-0.5 mr-2" />
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2">
               <Loader2 className="h-3 w-3 text-white/25 animate-spin" />
             </div>
@@ -626,9 +622,7 @@ export default function Dashboard() {
       {/* ─── Top bar ──────────────────────────────────────────────────────── */}
       <header className="shrink-0 flex items-center justify-between h-13 px-5 border-b border-white/[0.05] bg-[#080810]/95 backdrop-blur-xl">
         <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-lg bg-[#6366f1]/15 border border-[#6366f1]/20 flex items-center justify-center">
-            <img src="/lumora-icon.png" alt="Lumora" className="h-4 w-4 object-contain" />
-          </div>
+          <img src="/lumora-brand.png" alt="Lumora" className="h-7 w-7 object-contain" />
           <span className="font-mono font-bold text-sm tracking-[0.15em] text-white">LUMORA</span>
           <span className="h-3.5 w-px bg-white/[0.08] mx-1" />
           <span className="text-xs font-mono text-white/30 hidden sm:block">Portal</span>

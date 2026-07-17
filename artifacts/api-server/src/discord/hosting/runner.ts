@@ -1266,11 +1266,23 @@ function scheduleAutoRestart(
   const attemptAllowed = tryConsumeAutoRestartAttempt(ticketId);
   if (!attemptAllowed) {
     logger.warn({ ticketId }, "Hosted bot exceeded auto-restart budget; giving up");
+    // Make the final "crashed" status visible — no more retries.
+    db.update(hostedBotsTable)
+      .set({ errorMessage: "Auto-restart budget exhausted. Please restart the bot manually." })
+      .where(eq(hostedBotsTable.ticketId, ticketId))
+      .catch(() => undefined);
     return;
   }
   const attemptNumber = getAutoRestartAttempts(ticketId);
   const delay = AUTO_RESTART_BASE_DELAY_MS * attemptNumber;
   logger.info({ ticketId, delay, attemptNumber }, "Scheduling auto-restart for crashed hosted bot");
+
+  // Show "starting" immediately so the user can see the restart is in progress.
+  db.update(hostedBotsTable)
+    .set({ status: "starting", errorMessage: null, aiExplanation: null })
+    .where(eq(hostedBotsTable.ticketId, ticketId))
+    .catch(() => undefined);
+
   setTimeout(() => {
     restartHostedBot(ticketId, onCrash, { isAutoRestart: true }).catch((err) => {
       logger.error({ err, ticketId }, "Auto-restart attempt failed");
@@ -2135,6 +2147,17 @@ export async function stopHostedBot(ticketId: number): Promise<HostResult> {
 export async function resumeHostedBotsOnBoot(
   notify: (ticketId: number, result: HostResult) => void,
 ): Promise<void> {
+  // Reset any bots that were mid-launch when the server went down — their
+  // process is definitely gone, so "starting" is stale. Mark them stopped so
+  // the user can restart cleanly rather than seeing a forever-"starting" state.
+  await db
+    .update(hostedBotsTable)
+    .set({
+      status: "stopped",
+      errorMessage: "Server restarted during launch — press Restart to try again.",
+    })
+    .where(eq(hostedBotsTable.status, "starting"));
+
   // Resume any bot that was live at the time the server was restarted,
   // regardless of which phase of the Discord connection lifecycle it was in.
   const rows = await db
