@@ -156,9 +156,10 @@ export async function buildFileTree(
 
 // ─── Knowledge base loader ────────────────────────────────────────────────────
 
-async function loadKnowledge(): Promise<string> {
+export async function loadKnowledge(): Promise<string> {
   const files = [
     "deployment-rules.md",
+    "common-fixes.md",
     "discord-js-errors.md",
     "python-bot-errors.md",
     "npm-errors.md",

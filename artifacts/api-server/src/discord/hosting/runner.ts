@@ -27,6 +27,7 @@ import {
   resolveTokenAlias,
   MAX_REPAIR_ATTEMPTS,
 } from "./aiRepair";
+import { runAutonomousAgent } from "./aiAgent";
 
 export const MAX_ZIP_BYTES = 100 * 1024 * 1024; // 100MB
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — large monorepos can be slow
@@ -1334,29 +1335,36 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
     );
     await updateHostedBot(ticketId, { repairAttempts: attempt });
 
-    const repair = await repairCrashedBot({
-      projectRoot,
-      persistentDir: persistentBotDir,
-      language,
+    const repair = await runAutonomousAgent({
+      context: {
+        ticketId,
+        projectRoot,
+        persistentDir: persistentBotDir,
+        language,
+        fileName,
+        userVarNames: Object.keys(userVars),
+      },
+      mode: "post_crash",
+      crashLogs: crashOutput,
       pkg,
-      crashOutput,
-      userVars,
       attemptNumber: attempt,
-      fileName,
-      ticketId,
     });
 
     for (const fix of repair.appliedFixes) {
       appendLiveLog(ticketId, `[Lumora] Fixed: ${fix}\n`);
     }
 
+    if (repair.requiresUserAction) {
+      // Human must act — no point retrying automatically.
+      if (repair.userActionMessage) {
+        appendLiveLog(ticketId, `[Lumora] Action needed: ${repair.userActionMessage}\n`);
+      }
+      return { fixed: false, friendlyMessage: repair.friendlyMessage, lastOutput: crashOutput };
+    }
+
     if (repair.appliedFixes.length === 0) {
       // No automated fix is possible — further retries won't help.
-      if (repair.requiresUserAction && repair.userActionMessage) {
-        appendLiveLog(ticketId, `[Lumora] Action needed: ${repair.userActionMessage}\n`);
-      } else {
-        appendLiveLog(ticketId, "[Lumora] No automatic fix is available for this error.\n");
-      }
+      appendLiveLog(ticketId, "[Lumora] No automatic fix is available for this error.\n");
       return { fixed: false, friendlyMessage: repair.friendlyMessage, lastOutput: crashOutput };
     }
 
@@ -1909,6 +1917,56 @@ export async function hostUploadedZip(params: {
       if (!fix.description.includes("Pre-launch fix:")) {
         appendLiveLog(ticketId, `[Lumora] Pre-launch: ${fix.description}\n`);
       }
+    }
+  }
+
+  // ── Autonomous AI pre-launch agent ─────────────────────────────────────
+  // Runs a multi-turn AI agent that inspects every file, detects problems,
+  // and applies fixes BEFORE the first startup probe. Falls back gracefully
+  // when OPENROUTER_API_KEY is not configured.
+  if (process.env["OPENROUTER_API_KEY"]) {
+    const preLaunchAgent = await runAutonomousAgent({
+      context: {
+        ticketId,
+        projectRoot,
+        persistentDir: detectedBotDir,
+        language,
+        fileName,
+        userVarNames: Object.keys(userVars),
+      },
+      mode: "pre_launch",
+      pkg: pkg ?? null,
+    });
+
+    if (preLaunchAgent.requiresUserAction) {
+      return reportFailure(ticketId, fileName, "error", {
+        message: preLaunchAgent.friendlyMessage,
+        detail: preLaunchAgent.userActionMessage,
+        startCommand: startCommand.label,
+      });
+    }
+
+    // If the agent determined a different start command, apply it.
+    if (preLaunchAgent.startCommand) {
+      const [agentCmd, ...agentArgs] = preLaunchAgent.startCommand.split(" ");
+      if (agentCmd) {
+        startCommand = { cmd: agentCmd, args: agentArgs, label: preLaunchAgent.startCommand };
+        await updateHostedBot(ticketId, { startCommand: preLaunchAgent.startCommand });
+      }
+    }
+
+    // Re-read package.json in case the agent modified it (e.g. added start script)
+    if (language === "node" && pm) {
+      try {
+        const updatedPkg = JSON.parse(
+          await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
+        ) as Record<string, unknown>;
+        const resolved = resolveNodeStartCommand(projectRoot, updatedPkg, pm);
+        if (!("error" in resolved)) {
+          startCommand = resolved;
+          await updateHostedBot(ticketId, { startCommand: resolved.label });
+        }
+      } catch { /* leave unchanged */ }
     }
   }
 
