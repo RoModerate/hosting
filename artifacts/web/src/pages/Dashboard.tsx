@@ -6,6 +6,7 @@ import {
   getGetSessionQueryKey,
   useUploadBot,
   useRestartBot,
+  useStopBot,
 } from '@workspace/api-client-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -28,6 +29,7 @@ import {
   Eye,
   EyeOff,
   Files,
+  PowerOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -124,6 +126,7 @@ export default function Dashboard() {
 
   const uploadBot = useUploadBot();
   const restartBot = useRestartBot();
+  const stopBot = useStopBot();
 
   useEffect(() => {
     if (isError && (error as any)?.status === 401) {
@@ -258,6 +261,18 @@ export default function Dashboard() {
     });
   };
 
+  const handleStop = () => {
+    stopBot.mutate(undefined, {
+      onSuccess: () => {
+        toast.success('Bot stopped');
+        queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
+      },
+      onError: (err: any) => {
+        toast.error(`Stop failed: ${err?.data?.error || err?.error || 'Unknown error'}`);
+      },
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background">
@@ -379,15 +394,28 @@ export default function Dashboard() {
                       ))}
                     </div>
 
-                    <Button
-                      onClick={handleRestart}
-                      disabled={restartBot.isPending || isProcessing}
-                      className="w-full font-mono text-xs tracking-widest h-10"
-                      variant="outline"
-                    >
-                      <RotateCw className={`w-3.5 h-3.5 mr-2 ${restartBot.isPending ? 'animate-spin' : ''}`} />
-                      {restartBot.isPending ? 'RESTARTING...' : 'RESTART BOT'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleStop}
+                        disabled={stopBot.isPending || restartBot.isPending || isProcessing || hostedBot.status === 'stopped'}
+                        className="flex-1 font-mono text-xs tracking-widest h-10 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-300"
+                        variant="outline"
+                      >
+                        {stopBot.isPending
+                          ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                          : <PowerOff className="w-3.5 h-3.5 mr-2" />}
+                        {stopBot.isPending ? 'STOPPING...' : 'POWER OFF'}
+                      </Button>
+                      <Button
+                        onClick={handleRestart}
+                        disabled={restartBot.isPending || stopBot.isPending || isProcessing}
+                        className="flex-1 font-mono text-xs tracking-widest h-10"
+                        variant="outline"
+                      >
+                        <RotateCw className={`w-3.5 h-3.5 mr-2 ${restartBot.isPending ? 'animate-spin' : ''}`} />
+                        {restartBot.isPending ? 'RESTARTING...' : 'RESTART BOT'}
+                      </Button>
+                    </div>
                   </>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-14 text-center">

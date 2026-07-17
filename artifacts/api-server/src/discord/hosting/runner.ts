@@ -1405,6 +1405,33 @@ export async function getHostedBotStatus(ticketId: number) {
   return row ?? null;
 }
 
+/**
+ * Gracefully stops the bot without clearing its upload/config, so it can be
+ * restarted later via restartHostedBot.
+ */
+export async function stopHostedBot(ticketId: number): Promise<HostResult> {
+  const [row] = await db
+    .select()
+    .from(hostedBotsTable)
+    .where(eq(hostedBotsTable.ticketId, ticketId));
+
+  if (!row) {
+    return { status: "error", message: "No bot has been uploaded to this ticket yet." };
+  }
+
+  stopProcess(ticketId);
+  resetAutoRestartAttempts(ticketId);
+
+  await updateHostedBot(ticketId, {
+    status: "stopped",
+    errorMessage: null,
+    aiExplanation: null,
+    recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
+  });
+
+  return { status: "stopped" as any, message: "The bot has been stopped." };
+}
+
 export async function resumeHostedBotsOnBoot(
   notify: (ticketId: number, result: HostResult) => void,
 ): Promise<void> {

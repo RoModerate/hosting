@@ -13,6 +13,7 @@ import {
   listDirectory,
   MAX_FILE_UPLOAD_BYTES,
   readFileContent,
+  searchFiles,
   writeFileContent,
   writeUploadedFile,
 } from "../discord/hosting/fileManager";
@@ -172,6 +173,33 @@ router.post(
     }
   },
 );
+
+router.get("/bots/files/search", async (req, res) => {
+  const session = await requireSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    return;
+  }
+
+  const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
+  if (!q) {
+    res.json({ results: [] });
+    return;
+  }
+
+  if (!ensureBotFilesRootExists(session.ticket.id)) {
+    res.json({ results: [] });
+    return;
+  }
+
+  try {
+    const results = await searchFiles(session.ticket.id, q);
+    res.json({ results });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
 
 router.delete("/bots/files", async (req, res) => {
   const session = await requireSession(req);

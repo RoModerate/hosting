@@ -236,6 +236,68 @@ export async function createDirectory(ticketId: number, relPath: string): Promis
   await fsp.mkdir(abs, { recursive: true });
 }
 
+export interface SearchResult {
+  path: string;
+  name: string;
+  type: "file" | "directory" | "symlink";
+  size: number;
+  extension: string | null;
+}
+
+/**
+ * Recursively searches the bot's file tree for entries whose name contains
+ * `query` (case-insensitive). Returns at most `limit` results.
+ */
+export async function searchFiles(
+  ticketId: number,
+  query: string,
+  limit = 200,
+): Promise<SearchResult[]> {
+  const root = botFilesRoot(ticketId);
+  const q = query.toLowerCase();
+  const results: SearchResult[] = [];
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (results.length >= limit || depth > 12) return;
+    let entries: fsp.Dirent[];
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (results.length >= limit) break;
+      // Skip node_modules and .git for performance
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const absPath = path.join(dir, entry.name);
+      let type: SearchResult["type"] = "file";
+      let size = 0;
+      try {
+        const lst = await fsp.lstat(absPath);
+        if (lst.isSymbolicLink()) type = "symlink";
+        else if (lst.isDirectory()) type = "directory";
+        else { type = "file"; size = lst.size; }
+      } catch { continue; }
+
+      if (entry.name.toLowerCase().includes(q)) {
+        results.push({
+          path: toRelPath(root, absPath),
+          name: entry.name,
+          type,
+          size,
+          extension: type === "file" ? extensionOf(entry.name) : null,
+        });
+      }
+      if (type === "directory") {
+        await walk(absPath, depth + 1);
+      }
+    }
+  }
+
+  await walk(root, 0);
+  return results;
+}
+
 export async function deletePath(ticketId: number, relPath: string): Promise<void> {
   const root = botFilesRoot(ticketId);
   const abs = resolveBotPath(ticketId, relPath);

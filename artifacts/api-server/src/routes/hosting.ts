@@ -19,6 +19,7 @@ import {
   MAX_ZIP_BYTES,
   restartHostedBot,
   setHostedBotEnvVars,
+  stopHostedBot,
   ticketUploadDir,
   updateHostedBot,
   type HostResult,
@@ -283,6 +284,30 @@ router.post("/bots/env", async (req, res) => {
     logger.error({ err, ticketId: session.ticket.id }, "Failed to save hosted bot env vars");
     res.status(500).json({ error: "Failed to save secrets. Please try again." });
   }
+});
+
+router.post("/bots/stop", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    return;
+  }
+
+  const existing = await getHostedBotStatus(session.ticket.id);
+  if (!existing) {
+    res.status(400).json({ error: "No bot has been uploaded to this ticket yet." });
+    return;
+  }
+
+  const result = await stopHostedBot(session.ticket.id);
+
+  notifyTicketChannel(
+    session.ticket.id,
+    formatResultMessage(result, "Stopped via hosting portal"),
+  ).catch(() => undefined);
+
+  res.json(toHostOutcome(result));
 });
 
 router.post("/bots/restart", async (req, res) => {

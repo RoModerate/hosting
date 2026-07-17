@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   Binary,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -271,7 +273,39 @@ export default function FileManager({ hasBot }: FileManagerProps) {
   const [newNameMode, setNewNameMode] = useState<'file' | 'folder' | null>(null);
   const newNameRef = useRef<HTMLInputElement>(null);
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const isDirty = fileContent !== originalContent;
+
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!q.trim()) { setSearchResults(null); setSearchLoading(false); return; }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const data = await apiFetch(`${BASE}/api/bots/files/search?q=${encodeURIComponent(q.trim())}`) as any;
+        setSearchResults(data.results ?? []);
+      } catch {
+        toast.error('Search failed');
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 280);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(null);
+    setSearchLoading(false);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  };
 
   const refreshRoot = useCallback(async () => {
     setRootLoading(true);
@@ -628,34 +662,105 @@ export default function FileManager({ hasBot }: FileManagerProps) {
       <div className="flex" style={{ height: 480 }}>
 
         {/* File tree sidebar */}
-        <div className="w-56 shrink-0 border-r border-border/40 overflow-y-auto bg-background/20 py-2">
-          {rootLoading && rootEntries === null ? (
-            <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span className="text-[10px] font-mono">Loading...</span>
-            </div>
-          ) : rootEntries === null ? (
-            <div className="px-4 py-6 text-[10px] font-mono text-muted-foreground/40">
-              No files found
-            </div>
-          ) : rootEntries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-              <Folder className="h-6 w-6 text-muted-foreground/20 mb-2" />
-              <p className="text-[10px] font-mono text-muted-foreground/40">Empty directory</p>
-              <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Upload a file to get started</p>
-            </div>
-          ) : (
-            rootEntries.map((entry) => (
-              <TreeNode
-                key={entry.path}
-                entry={entry}
-                depth={0}
-                selectedPath={selectedEntry?.path ?? null}
-                onSelect={handleSelectFile}
-                refreshToken={treeRefreshToken}
+        <div className="w-56 shrink-0 border-r border-border/40 flex flex-col bg-background/20">
+          {/* Search input */}
+          <div className="px-2 py-2 border-b border-border/30">
+            <div className="relative flex items-center">
+              {searchLoading
+                ? <Loader2 className="absolute left-2 h-3 w-3 animate-spin text-muted-foreground/40 pointer-events-none" />
+                : <Search className="absolute left-2 h-3 w-3 text-muted-foreground/40 pointer-events-none" />}
+              <input
+                ref={searchRef}
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search files…"
+                className="w-full bg-background/60 border border-border/40 rounded-md pl-7 pr-6 py-1 text-[11px] font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+                spellCheck={false}
               />
-            ))
-          )}
+              {searchQuery && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-1.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tree or search results */}
+          <div className="flex-1 overflow-y-auto py-2">
+            {searchQuery.trim() ? (
+              // ── Search results view ────────────────────────────────────
+              searchResults === null || searchLoading ? (
+                <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
+                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  <span className="text-[10px] font-mono">Searching…</span>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <Search className="h-5 w-5 text-muted-foreground/20 mb-2" />
+                  <p className="text-[10px] font-mono text-muted-foreground/40">No matches found</p>
+                </div>
+              ) : (
+                <div>
+                  <div className="px-3 pb-1">
+                    <span className="text-[9px] font-mono text-muted-foreground/30 tracking-widest">{searchResults.length} RESULT{searchResults.length !== 1 ? 'S' : ''}</span>
+                  </div>
+                  {searchResults.map((entry) => {
+                    const isSelected = selectedEntry?.path === entry.path;
+                    return (
+                      <button
+                        key={entry.path}
+                        className={`w-full flex items-center gap-1.5 px-3 py-[4px] text-left transition-colors text-xs font-mono ${isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => {
+                          if (entry.type === 'file') { handleSelectFile(entry); clearSearch(); }
+                        }}
+                        title={entry.path}
+                      >
+                        {entry.type === 'directory'
+                          ? <Folder className="h-3 w-3 text-yellow-400/60 shrink-0" />
+                          : <FileIcon className="h-3 w-3 text-muted-foreground/50 shrink-0" />}
+                        <span className="truncate">{entry.name}</span>
+                        {entry.type === 'file' && entry.size > 0 && (
+                          <span className="ml-auto text-[9px] text-muted-foreground/30 shrink-0">{humanSize(entry.size)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              // ── Normal file tree view ──────────────────────────────────
+              rootLoading && rootEntries === null ? (
+                <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="text-[10px] font-mono">Loading...</span>
+                </div>
+              ) : rootEntries === null ? (
+                <div className="px-4 py-6 text-[10px] font-mono text-muted-foreground/40">
+                  No files found
+                </div>
+              ) : rootEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <Folder className="h-6 w-6 text-muted-foreground/20 mb-2" />
+                  <p className="text-[10px] font-mono text-muted-foreground/40">Empty directory</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Upload a file to get started</p>
+                </div>
+              ) : (
+                rootEntries.map((entry) => (
+                  <TreeNode
+                    key={entry.path}
+                    entry={entry}
+                    depth={0}
+                    selectedPath={selectedEntry?.path ?? null}
+                    onSelect={handleSelectFile}
+                    refreshToken={treeRefreshToken}
+                  />
+                ))
+              )
+            )}
+          </div>
         </div>
 
         {/* Editor pane */}

@@ -426,6 +426,52 @@ export const useRestartBot = <TError = ErrorType<ErrorResponse>,
       return useMutation(getRestartBotMutationOptions(options));
     }
 
+export const getStopBotUrl = () => {
+  return `/api/bots/stop`
+}
+
+/**
+ * @summary Stop the hosted bot without removing its upload
+ */
+export const stopBot = async ( options?: RequestInit): Promise<HostOutcome> => {
+  return customFetch<HostOutcome>(getStopBotUrl(), {
+    ...options,
+    method: 'POST',
+  });
+}
+
+export const getStopBotMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopBot>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof stopBot>>, TError,void, TContext> => {
+  const mutationKey = ['stopBot'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+    options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+    options
+    : {...options, mutation: {...options.mutation, mutationKey}}
+    : {mutation: { mutationKey, }, request: undefined};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopBot>>, void> = () => {
+    return stopBot(requestOptions)
+  }
+  return { mutationFn, ...mutationOptions }
+}
+
+export type StopBotMutationResult = NonNullable<Awaited<ReturnType<typeof stopBot>>>
+export type StopBotMutationError = ErrorType<ErrorResponse>
+
+/**
+ * @summary Stop the hosted bot
+ */
+export const useStopBot = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopBot>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof stopBot>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getStopBotMutationOptions(options));
+    }
+
 export const getGetAdminStatusUrl = () => {
 
 
