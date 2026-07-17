@@ -102,6 +102,7 @@ export default function Dashboard() {
   const [uploadOutcome, setUploadOutcome] = useState<UploadOutcome>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Env vars state
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>([]);
@@ -216,37 +217,83 @@ export default function Dashboard() {
     }
   };
 
+  const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB — must match server
+
   const handleUpload = (file: File) => {
-    if (!file.name.endsWith('.zip')) {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
       setUploadError('Only .zip files are supported. Please select a .zip archive.');
       return;
     }
+    if (file.size === 0) {
+      setUploadError('The selected file is empty. Please choose a valid ZIP archive.');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('That file is too large. The maximum accepted size is 100 MB.');
+      return;
+    }
+
     setUploadOutcome(null);
     setUploadError(null);
+    setUploadProgress(0);
     isUploadingRef.current = true;
     setIsUploading(true);
 
-    uploadBot.mutate(
-      { data: { file } },
-      {
-        onSuccess: (result: any) => {
-          if (result?.status === 'processing') {
-            queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
-            return;
-          }
-          isUploadingRef.current = false;
-          setIsUploading(false);
-          setUploadOutcome(result as UploadOutcome);
-          queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
-        },
-        onError: (err: any) => {
-          isUploadingRef.current = false;
-          setIsUploading(false);
-          const msg = err?.data?.error || err?.message || 'Upload failed. Please try again.';
-          setUploadError(msg);
-        },
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}/api/bots/upload`, true);
+    xhr.withCredentials = true;
+    xhr.timeout = 5 * 60 * 1000; // 5 minutes
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100));
       }
-    );
+    });
+
+    const resetUploading = () => {
+      isUploadingRef.current = false;
+      setIsUploading(false);
+      setUploadProgress(0);
+    };
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 202) {
+        setUploadProgress(100);
+        queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
+        // Deployment status tracked via polling — isUploading clears when status settles
+        return;
+      }
+      // Synchronous error (bad ZIP, too large, wrong type, etc.)
+      resetUploading();
+      try {
+        const data = JSON.parse(xhr.responseText);
+        setUploadError(data?.error || 'Upload failed. Please try again.');
+      } catch {
+        setUploadError(xhr.status === 413
+          ? 'That file is too large. The maximum accepted size is 100 MB.'
+          : 'Upload failed. Please try again.');
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      resetUploading();
+      setUploadError('Upload failed. Your connection was interrupted — please try again.');
+    });
+
+    xhr.addEventListener('abort', () => {
+      resetUploading();
+      setUploadError('Upload was cancelled.');
+    });
+
+    xhr.addEventListener('timeout', () => {
+      resetUploading();
+      setUploadError('Upload timed out. Please try again with a smaller file or a faster connection.');
+    });
+
+    xhr.send(formData);
   };
 
   const handleRestart = () => {
@@ -461,6 +508,24 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* AI Repair Status */}
+            {hostedBot && (hostedBot as any).repairAttempts > 0 && (hostedBot.status === 'crashed' || hostedBot.status === 'error') && (
+              <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4"
+                style={{ boxShadow: '0 0 20px rgba(139,92,246,0.06)' }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-4 w-4 text-violet-400" />
+                  <span className="font-mono text-xs text-violet-400 font-bold tracking-wider">AI AUTO-REPAIR</span>
+                  <span className="ml-auto font-mono text-[10px] text-violet-400/60 border border-violet-500/20 rounded px-1.5 py-0.5">
+                    {(hostedBot as any).repairAttempts}/3 attempts
+                  </span>
+                </div>
+                <p className="text-[10px] font-mono text-violet-200/60 leading-relaxed">
+                  Lumora's AI repair system automatically attempted to fix your bot. Review the crash logs below, then check your secrets and try re-uploading.
+                </p>
+              </div>
+            )}
+
             {/* AI Diagnostics */}
             {hostedBot?.aiExplanation && (
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4"
@@ -641,14 +706,32 @@ export default function Dashboard() {
                   />
 
                   {isUploading ? (
-                    <div className="flex flex-col items-center gap-3">
+                    <div className="flex flex-col items-center gap-3 w-full">
                       <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
-                      <div>
+                      <div className="w-full text-center">
                         <p className="font-mono text-xs text-blue-400 font-bold tracking-wider">
-                          {hostedBot?.status === 'installing' ? 'INSTALLING DEPS...' : hostedBot?.status === 'starting' ? 'STARTING BOT...' : 'UPLOADING...'}
+                          {uploadProgress < 100
+                            ? `UPLOADING… ${uploadProgress}%`
+                            : hostedBot?.status === 'installing'
+                            ? 'INSTALLING DEPS...'
+                            : hostedBot?.status === 'starting'
+                            ? 'STARTING BOT...'
+                            : 'PROCESSING...'}
                         </p>
-                        <p className="text-[10px] font-mono text-muted-foreground/60 mt-1">
-                          {hostedBot?.status === 'installing' ? 'May take several minutes for large projects' : 'Please wait...'}
+                        {uploadProgress > 0 && uploadProgress < 100 && (
+                          <div className="mt-2 mx-4 bg-blue-500/10 rounded-full h-1 overflow-hidden">
+                            <div
+                              className="h-full bg-blue-400 rounded-full transition-all duration-150"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        )}
+                        <p className="text-[10px] font-mono text-muted-foreground/60 mt-1.5">
+                          {uploadProgress < 100
+                            ? 'Do not close this tab'
+                            : hostedBot?.status === 'installing'
+                            ? 'May take several minutes for large projects'
+                            : 'Please wait...'}
                         </p>
                       </div>
                     </div>

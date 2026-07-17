@@ -47,6 +47,7 @@ function toHostedBotSummary(bot: HostedBot | null) {
     status: bot.status,
     startCommand: bot.startCommand || null,
     restartCount: bot.restartCount,
+    repairAttempts: bot.repairAttempts ?? 0,
     errorMessage: bot.errorMessage ?? null,
     aiExplanation: bot.aiExplanation ?? null,
     lastStartedAt: bot.lastStartedAt ? bot.lastStartedAt.toISOString() : null,
@@ -182,6 +183,48 @@ router.post(
     if (!file || !file.originalname.toLowerCase().endsWith(".zip")) {
       res.status(400).json({ error: "Please upload a .zip file." });
       return;
+    }
+
+    // ── ZIP integrity check on the in-memory buffer (before writing to disk) ──
+    // This gives the client an immediate 400 for corrupt/truncated ZIPs instead
+    // of a 202 that later fails during background extraction.
+    {
+      const buf = file.buffer;
+
+      if (buf.length < 22) {
+        res.status(400).json({ error: "Upload failed. Your ZIP was incomplete or corrupted. Please upload again." });
+        return;
+      }
+
+      // Local-file-header magic: PK\x03\x04
+      if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
+        res.status(400).json({ error: "The file you uploaded is not a ZIP archive. Please upload a .zip file." });
+        return;
+      }
+
+      // End-of-Central-Directory scan — catches uploads interrupted mid-transfer.
+      const eocdWindow = Math.min(buf.length, 65536 + 22);
+      const eocdStart  = buf.length - eocdWindow;
+      let eocdFound = false;
+      for (let i = eocdWindow - 4; i >= 0; i--) {
+        if (
+          buf[eocdStart + i]     === 0x50 &&
+          buf[eocdStart + i + 1] === 0x4b &&
+          buf[eocdStart + i + 2] === 0x05 &&
+          buf[eocdStart + i + 3] === 0x06
+        ) {
+          eocdFound = true;
+          break;
+        }
+      }
+      if (!eocdFound) {
+        logger.warn(
+          { ticketId: session.ticket.id, fileName: file.originalname, size: buf.length },
+          "ZIP upload rejected: EOCD not found (likely interrupted transfer)",
+        );
+        res.status(400).json({ error: "Upload failed. Your ZIP was incomplete or corrupted — the transfer may have been interrupted. Please upload again." });
+        return;
+      }
     }
 
     try {

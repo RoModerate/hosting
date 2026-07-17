@@ -1347,8 +1347,11 @@ function attachSupervision(
 }
 
 /**
- * Validates that a file is a well-formed ZIP archive by checking its PK
- * magic bytes (0x50 0x4B) before any extraction is attempted.
+ * Validates that a file is a well-formed ZIP archive by checking:
+ *  1. Local-file-header magic bytes (PK\x03\x04) — catches wrong file type.
+ *  2. End-of-Central-Directory record (PK\x05\x06) — catches truncated /
+ *     interrupted uploads that produce "unexpected EOF" during extraction.
+ *
  * Returns an error string on failure, or null if the file looks valid.
  */
 async function validateZipHeader(zipPath: string): Promise<string | null> {
@@ -1360,21 +1363,53 @@ async function validateZipHeader(zipPath: string): Promise<string | null> {
   }
 
   if (stat.size === 0) {
-    return "The uploaded file is empty.";
+    return "Upload failed. Your ZIP was empty. Please upload again.";
+  }
+
+  // Minimum valid ZIP is 22 bytes (empty EOCD only).
+  if (stat.size < 22) {
+    return "Upload failed. Your ZIP was incomplete or corrupted. Please upload again.";
   }
 
   let fd: import("node:fs/promises").FileHandle | null = null;
   try {
     fd = await fsp.open(zipPath, "r");
-    const buf = Buffer.alloc(4);
-    await fd.read(buf, 0, 4, 0);
-    // ZIP local-file-header magic: PK\x03\x04
-    if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
-      return "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.";
+
+    // ── 1. Local-file-header magic ──────────────────────────────────────────
+    const startBuf = Buffer.alloc(4);
+    await fd.read(startBuf, 0, 4, 0);
+    if (startBuf[0] !== 0x50 || startBuf[1] !== 0x4b) {
+      return "The file you uploaded is not a ZIP archive. Please upload a .zip file.";
     }
+
+    // ── 2. End-of-Central-Directory (EOCD) scan ─────────────────────────────
+    // For ZIPs without a comment the EOCD is the last 22 bytes.
+    // We scan up to 64 KB + 22 bytes from the end to handle ZIPs with comments.
+    const eocdWindowSize = Math.min(stat.size, 65536 + 22);
+    const eocdBuf = Buffer.alloc(eocdWindowSize);
+    await fd.read(eocdBuf, 0, eocdWindowSize, stat.size - eocdWindowSize);
+
+    let eocdFound = false;
+    // Search backwards — EOCD is near the end.
+    for (let i = eocdWindowSize - 22; i >= 0; i--) {
+      if (
+        eocdBuf[i]     === 0x50 &&
+        eocdBuf[i + 1] === 0x4b &&
+        eocdBuf[i + 2] === 0x05 &&
+        eocdBuf[i + 3] === 0x06
+      ) {
+        eocdFound = true;
+        break;
+      }
+    }
+
+    if (!eocdFound) {
+      return "Upload failed. Your ZIP was incomplete or corrupted — the transfer may have been interrupted. Please upload again.";
+    }
+
     return null;
   } catch {
-    return "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.";
+    return "Upload failed. Your ZIP was incomplete or corrupted. Please upload again.";
   } finally {
     await fd?.close().catch(() => {});
   }
@@ -1413,14 +1448,40 @@ export async function hostUploadedZip(params: {
     errorMessage: null,
   });
 
-  try {
-    await extract(zipPath, { dir: extractRoot });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    logger.error({ err, ticketId, fileName }, "ZIP extraction failed");
+  // ── Extract with one automatic retry ───────────────────────────────────────
+  // Transient I/O errors (e.g. race conditions on some filesystems) can make
+  // the first attempt fail even on a valid archive. We retry once after a brief
+  // pause before surfacing the error to the user.
+  let extractErr: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt > 1) {
+      appendLiveLog(ticketId, "[Lumora] Retrying extraction…\n");
+      await fsp.rm(extractRoot, { recursive: true, force: true });
+      await fsp.mkdir(extractRoot, { recursive: true });
+      await new Promise<void>((resolve) => setTimeout(resolve, 600));
+    }
+    try {
+      await extract(zipPath, { dir: extractRoot });
+      extractErr = null;
+      break;
+    } catch (err) {
+      extractErr = err;
+      if (attempt < 2) {
+        logger.warn({ err, ticketId, fileName }, "ZIP extraction failed — retrying once");
+      }
+    }
+  }
+
+  if (extractErr !== null) {
+    // Log the real error for admins; show a clean message to the customer.
+    logger.error({ err: extractErr, ticketId, fileName }, "ZIP extraction failed after retry");
+    // Clean up partial extraction directory and the uploaded zip file.
+    await Promise.all([
+      fsp.rm(extractRoot, { recursive: true, force: true }).catch(() => {}),
+      fsp.rm(zipPath, { force: true }).catch(() => {}),
+    ]);
     return reportFailure(ticketId, fileName, "error", {
-      message: "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.",
-      detail,
+      message: "Upload failed. Your ZIP was incomplete or corrupted. Please upload again.",
     });
   }
 
