@@ -1,0 +1,15 @@
+I want a complete redesign of the Lumora website and portal. The current design feels outdated, cluttered, and unprofessional. Please redesign everything with a clean, modern, futuristic look that feels like a real SaaS product, not something that looks AI-generated. Focus on smooth animations, good spacing, rounded cards, subtle gradients, polished typography, and a consistent color palette. The entire experience should feel premium, simple to navigate, and visually appealing.
+
+Replace the current login/access system with Discord OAuth. When users log in, they should authenticate with Discord and, after logging in, display their Discord avatar, username, and basic profile information in the portal. Use this callback URL for authentication: `https://1856a7e5-1528-4aeb-a0d6-61fb032707fe-00-3iwhp0bat6r3a.worf.replit.dev/auth/discord/callback`. Add a professional account dropdown with the user's avatar, username, settings, and a logout button. The login page itself should also be redesigned to match the rest of the website.
+
+Completely redesign the homepage, portal, dashboard, file manager, deployment pages, console, and every major UI component. The portal should be much cleaner and easier to use. The current file manager feels outdated, so rebuild it with a modern file explorer interface that supports drag-and-drop uploads, right-click context menus, breadcrumbs, folders, file previews, search, sorting, and better organization. The deployment interface should clearly show bot status, logs, CPU, RAM, restart button, upload button, environment variables, and deployment history in a clean layout.
+
+Redesign the console into a professional terminal similar to cloud hosting providers. Allow users to resize, drag, detach, minimize, maximize, and move the console around the page. Add timestamps, colored log levels, auto-scroll, pause scrolling, clear logs, search logs, copy logs, download logs, and smooth real-time streaming.
+
+Improve every page so it feels polished and responsive on desktop and mobile. Remove unnecessary clutter like the current large upload section that makes the portal feel crowded. Simplify navigation while keeping all functionality easy to access.
+
+Add a visible Discord community section using my server invite: `https://discord.gg/4wEKPrgZmD`, and include a professional Join Discord button in the homepage navigation and footer.
+
+For `/genkey`, redesign the page and allow me to generate license keys from anywhere inside the admin panel instead of only on one page. Make key generation fast, flexible, and easy to manage.
+
+Overall, I want Lumora to feel like a premium hosting platform similar to modern cloud providers. Every animation, transition, button, modal, card, table, and page should feel smooth, responsive, and professionally designed. Before making changes, review the entire project so every page follows the same design language, and ensure all existing functionality continues to work after the redesign.
