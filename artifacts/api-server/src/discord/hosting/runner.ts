@@ -153,7 +153,8 @@ const DISCORD_ONLINE_PATTERNS: RegExp[] = [
   /connected to discord/i,
   /discord.*client.*ready/i,
   /gateway.*\bconnected\b/i,   // "gateway connected" — avoid matching "connection failed"
-  /BOT_READY/,                  // explicit signal: console.log("BOT_READY") in client.once("ready")
+  /LUMORA_READY/,               // explicit signal: console.log("LUMORA_READY") in client.once("ready")
+  /BOT_READY/,                  // legacy explicit signal (also accepted)
   /\[ready\]/i,                 // "[READY]" style log prefix
   /startup complete/i,
   /all shards.*ready/i,
@@ -576,8 +577,8 @@ function runStartupProbe(
         ticketId,
         "[Lumora] Process is alive — waiting for Discord ready signal " +
         `(up to ${Math.round((STARTUP_PROBE_MS - STARTUP_CONNECTING_DELAY_MS) / 1000)}s remaining)...\n` +
-        "[Lumora] Tip: add  console.log('BOT_READY')  inside client.once('ready', () => { ... })\n" +
-        "[Lumora]      to let Lumora detect the connection faster.\n",
+        "[Lumora] Tip: add  console.log('LUMORA_READY')  inside client.once('ready', () => { ... })\n" +
+        "[Lumora]      to let Lumora detect the connection instantly.\n",
       );
     }, STARTUP_CONNECTING_DELAY_MS);
 
@@ -641,7 +642,7 @@ function runStartupProbe(
         "[Lumora]\n" +
         "[Lumora]    To make Lumora detect connection instantly, add:\n" +
         "[Lumora]      client.once('ready', () => {\n" +
-        "[Lumora]        console.log('BOT_READY')  // ← Lumora detects this\n" +
+        "[Lumora]        console.log('LUMORA_READY')  // ← Lumora detects this\n" +
         "[Lumora]      })\n" +
         "[Lumora]\n" +
         "[Lumora]    Sending captured output to AI repair system...\n" +
@@ -1996,6 +1997,16 @@ export async function hostUploadedZip(params: {
       { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
       "Bot crashed on startup — entering AI repair loop",
     );
+
+    // Immediately mark as crashed with a repair-in-progress message so the UI
+    // never stays stuck on "starting" or "connecting" while the AI works.
+    await updateHostedBot(ticketId, {
+      status: "crashed",
+      errorMessage: probe.timedOut
+        ? "Bot started but never connected to Discord within 90 seconds. Sending logs to AI repair..."
+        : "Bot process crashed on startup. Sending logs to AI repair...",
+      recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
+    });
 
     // Run the known-pattern diagnosis first for a fast answer.
     const quickDiagnosis = diagnoseBotCrash(probe.output, userVars);

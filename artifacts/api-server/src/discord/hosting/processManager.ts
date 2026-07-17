@@ -167,7 +167,7 @@ export function listTrackedTicketIds(): number[] {
 // crash-loop. Each successful manual restart sets a cooldown; auto-restarts
 // and the initial deploy are exempt.
 
-const RESTART_COOLDOWN_MS = 20_000; // 20 seconds
+const RESTART_COOLDOWN_MS = 10_000; // 10 seconds
 const lastManualRestartAt = new Map<number, number>();
 
 /**

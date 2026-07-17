@@ -771,14 +771,25 @@ export default function Dashboard() {
 
                 {/* Actions */}
                 <div className="px-5 py-3.5 flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={handleRestart}
-                    disabled={isBusy}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <RotateCw className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-spin' : ''}`} />
-                    {restartBot.isPending ? 'Restarting…' : 'Restart'}
-                  </button>
+                  {hostedBot.status === 'stopped' ? (
+                    <button
+                      onClick={handleRestart}
+                      disabled={restartBot.isPending || stopBot.isPending || removingBot}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 text-xs font-mono text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/[0.08] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Play className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-pulse' : ''}`} />
+                      {restartBot.isPending ? 'Starting…' : 'Run'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleRestart}
+                      disabled={isBusy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <RotateCw className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-spin' : ''}`} />
+                      {restartBot.isPending ? 'Restarting…' : 'Restart'}
+                    </button>
+                  )}
                   <button
                     onClick={handleStop}
                     disabled={!canStop}
