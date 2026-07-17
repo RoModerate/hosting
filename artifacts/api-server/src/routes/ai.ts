@@ -369,121 +369,111 @@ When a user asks you to undo:
 
   const ticketId = session.ticket.id;
 
+  // Types for the multi-turn message history
+  type ChatMsg =
+    | { role: "system"; content: string }
+    | { role: "user"; content: string }
+    | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
+    | { role: "tool"; tool_call_id: string; content: string };
+
+  interface ToolCall {
+    id: string;
+    type: string;
+    function: { name: string; arguments: string };
+  }
+
+  const MAX_AGENT_TURNS = 8;
+
   try {
-    // ── First call: may include tool calls ─────────────────────────────────
-    const firstRes = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resolvedApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://lumora.host",
-        "X-Title": "Lumora Portal AI",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.slice(-12).map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content).slice(0, 4000),
-          })),
-        ],
-        tools: AI_TOOLS,
-        tool_choice: "auto",
-        temperature: 0.2,
-        max_tokens: 1500,
-      }),
-    });
-
-    if (!firstRes.ok) {
-      const errText = await firstRes.text().catch(() => "");
-      logger.error({ status: firstRes.status, body: errText.slice(0, 300) }, "OpenRouter AI chat failed");
-      res.status(502).json({ error: "AI service temporarily unavailable. Try again shortly." });
-      return;
-    }
-
-    const firstData = (await firstRes.json()) as {
-      choices?: Array<{
-        message?: {
-          content?: string;
-          tool_calls?: Array<{
-            id: string;
-            type: string;
-            function: { name: string; arguments: string };
-          }>;
-        };
-        finish_reason?: string;
-      }>;
-    };
-
-    const firstChoice = firstData.choices?.[0];
-    const firstMsg = firstChoice?.message;
-
-    // ── No tool calls — just return the text ──────────────────────────────
-    if (!firstMsg?.tool_calls?.length) {
-      res.json({ content: firstMsg?.content ?? "", toolResults: [] });
-      return;
-    }
-
-    // ── Execute tool calls ────────────────────────────────────────────────
-    const toolResults: Array<{ tool: string; result: string }> = [];
-
-    for (const tc of firstMsg.tool_calls) {
-      let args: Record<string, string> = {};
-      try {
-        args = JSON.parse(tc.function.arguments) as Record<string, string>;
-      } catch {
-        args = {};
-      }
-      const result = await executeTool(tc.function.name, args, ticketId);
-      toolResults.push({ tool: tc.function.name, result });
-    }
-
-    // ── Second call: get final response after tool execution ──────────────
-    const toolMessages = [
-      { role: "assistant" as const, content: firstMsg.content ?? null, tool_calls: firstMsg.tool_calls },
-      ...firstMsg.tool_calls.map((tc, i) => ({
-        role: "tool" as const,
-        tool_call_id: tc.id,
-        content: toolResults[i]?.result ?? "Done.",
+    const history: ChatMsg[] = [
+      { role: "system", content: systemPrompt },
+      ...messages.slice(-12).map((m) => ({
+        role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        content: String(m.content).slice(0, 4000),
       })),
     ];
 
-    const secondRes = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resolvedApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://lumora.host",
-        "X-Title": "Lumora Portal AI",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.slice(-12).map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content).slice(0, 4000),
-          })),
-          ...toolMessages,
-        ],
-        temperature: 0.2,
-        max_tokens: 1000,
-      }),
-    });
+    const allToolResults: Array<{ tool: string; result: string }> = [];
+    let finalContent = "";
 
-    if (!secondRes.ok) {
-      const summary = toolResults.map((r) => `${r.result}`).join("\n");
-      res.json({ content: summary, toolResults });
-      return;
+    // ── Multi-turn agent loop ─────────────────────────────────────────────
+    for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
+      const response = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resolvedApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://lumora.host",
+          "X-Title": "Lumora Portal AI",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: history,
+          tools: AI_TOOLS,
+          tool_choice: "auto",
+          temperature: 0.2,
+          max_tokens: 1500,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        logger.error({ status: response.status, body: errText.slice(0, 300) }, "OpenRouter AI chat failed");
+        if (turn === 0) {
+          res.status(502).json({ error: "AI service temporarily unavailable. Try again shortly." });
+          return;
+        }
+        // On later turns, fall back to whatever we have
+        break;
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{
+          message?: {
+            content?: string | null;
+            tool_calls?: ToolCall[];
+          };
+          finish_reason?: string;
+        }>;
+      };
+
+      const msg = data.choices?.[0]?.message;
+      const toolCalls = msg?.tool_calls ?? [];
+      const content = msg?.content ?? null;
+
+      // Add assistant turn to history
+      history.push({
+        role: "assistant",
+        content,
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+      } as ChatMsg);
+
+      // No tool calls — AI is done
+      if (toolCalls.length === 0) {
+        finalContent = content ?? "";
+        break;
+      }
+
+      // Execute all tool calls in this round
+      const roundResults: { tool_call_id: string; tool: string; result: string }[] = [];
+      for (const tc of toolCalls) {
+        let args: Record<string, string> = {};
+        try {
+          args = JSON.parse(tc.function.arguments) as Record<string, string>;
+        } catch { /* ignore */ }
+
+        const result = await executeTool(tc.function.name, args, ticketId);
+        allToolResults.push({ tool: tc.function.name, result });
+        roundResults.push({ tool_call_id: tc.id, tool: tc.function.name, result });
+      }
+
+      // Feed tool results back into history
+      for (const r of roundResults) {
+        history.push({ role: "tool", tool_call_id: r.tool_call_id, content: r.result });
+      }
     }
 
-    const secondData = (await secondRes.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const finalContent = secondData.choices?.[0]?.message?.content ?? "";
-
-    res.json({ content: finalContent, toolResults });
+    res.json({ content: finalContent, toolResults: allToolResults });
   } catch (err) {
     logger.error({ err }, "AI chat route error");
     res.status(502).json({ error: "Failed to reach the AI service." });
