@@ -293,7 +293,64 @@ function hasBotDependency(
     ...(pkg["devDependencies"] as Record<string, string> | undefined ?? {}),
     ...(pkg["peerDependencies"] as Record<string, string> | undefined ?? {}),
   };
-  return Object.keys(deps).some((k) => libs.has(k));
+  // libs covers explicit names; also match any @discordjs/* scoped package.
+  return Object.keys(deps).some((k) => libs.has(k) || k.startsWith("@discordjs/"));
+}
+
+// Regex patterns that strongly indicate Discord bot source code.
+const DISCORD_SOURCE_PATTERNS = [
+  /require\s*\(\s*['"]discord\.js['"]\s*\)/,
+  /from\s+['"]discord\.js['"]/,
+  /from\s+['"]eris['"]/,
+  /from\s+['"]oceanic\.js['"]/,
+  /from\s+['"]@discordjs\//,
+  /client\.login\s*\(/,
+  /new\s+Client\s*\(\s*[\{'"]/,   // new Client({ ... }) or new Client("token")
+  /import\s+discord\b/,           // Python: import discord
+  /from\s+discord(?:\.ext)?\s+import/,  // Python: from discord import ...
+];
+
+const SOURCE_SCAN_EXTS = new Set([".js", ".mjs", ".cjs", ".ts", ".mts", ".py"]);
+const SOURCE_SCAN_MAX_FILES = 40;
+const SOURCE_SCAN_MAX_BYTES = 64 * 1024; // 64 KB per file — enough for any realistic bot file
+
+/**
+ * Scans source files under `dir` (skipping node_modules, dist, etc.) for
+ * Discord-bot code patterns. Returns true as soon as a match is found.
+ * Used as a fallback when no Discord library is found in package.json deps.
+ */
+async function scanSourceFilesForDiscord(dir: string): Promise<boolean> {
+  let fileCount = 0;
+
+  async function scan(d: string, depth: number): Promise<boolean> {
+    if (depth > 5 || fileCount >= SOURCE_SCAN_MAX_FILES) return false;
+    let entries: fs.Dirent[];
+    try { entries = await fsp.readdir(d, { withFileTypes: true }); }
+    catch { return false; }
+
+    for (const entry of entries) {
+      if (fileCount >= SOURCE_SCAN_MAX_FILES) return false;
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue;
+        if (await scan(path.join(d, entry.name), depth + 1)) return true;
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!SOURCE_SCAN_EXTS.has(ext)) continue;
+        fileCount++;
+        try {
+          const fd = await fsp.open(path.join(d, entry.name), "r");
+          const buf = Buffer.alloc(SOURCE_SCAN_MAX_BYTES);
+          const { bytesRead } = await fd.read(buf, 0, SOURCE_SCAN_MAX_BYTES, 0);
+          await fd.close();
+          const content = buf.subarray(0, bytesRead).toString("utf-8");
+          if (DISCORD_SOURCE_PATTERNS.some((p) => p.test(content))) return true;
+        } catch { /* unreadable — skip */ }
+      }
+    }
+    return false;
+  }
+
+  return scan(dir, 0);
 }
 
 /**
@@ -493,8 +550,7 @@ export interface ProjectRoot {
 export type FindRootResult =
   | { kind: "found"; root: ProjectRoot }
   | { kind: "not_found" }
-  | { kind: "workspace_only" }
-  | { kind: "ambiguous"; candidates: { label: string; dir: string }[] };
+  | { kind: "ambiguous"; candidates: { label: string; dir: string; pkgJsonPath: string | null }[] };
 
 /**
  * Walks the extracted ZIP looking for the most likely Discord bot project root.
@@ -583,8 +639,8 @@ async function findProjectRoot(rootDir: string): Promise<FindRootResult> {
   }
 
   // ── Workspace-member classification ──────────────────────────────────────
-  // For every workspace root found during the walk, parse its package globs
-  // and determine which candidates are declared workspace members.
+  // Parse workspace globs from every discovered workspace root so we can
+  // tell which candidates are declared members of a monorepo.
   const workspaceDefs = workspaceRootDirs.map((root) => ({
     root,
     globs: parseWorkspaceGlobs(root),
@@ -600,30 +656,46 @@ async function findProjectRoot(rootDir: string): Promise<FindRootResult> {
     (isMember ? workspaceMembers : standalone).push(c);
   }
 
-  if (standalone.length === 0) {
-    // Every candidate is a workspace member (or the ZIP only had workspace roots).
-    return { kind: "workspace_only" };
+  // When every candidate lives inside a workspace (the common case for a
+  // workspace ZIP upload), treat the workspace members as valid candidates
+  // rather than rejecting the upload. The bot is almost certainly one of
+  // those member packages — we just need to pick the right one.
+  const selectionPool: ProjectCandidate[] =
+    standalone.length > 0 ? standalone : workspaceMembers;
+
+  if (selectionPool.length === 0) {
+    // ZIP had only workspace-root markers (pnpm-workspace.yaml / workspaces
+    // field) but no actual packages inside — nothing to run.
+    return { kind: "not_found" };
   }
 
   // ── Winner selection ──────────────────────────────────────────────────────
-  standalone.sort((a, b) => b.score - a.score);
+  selectionPool.sort((a, b) => b.score - a.score);
 
-  // Prefer discord-library packages; fall back to the full pool.
-  const discordPool = standalone.filter((c) => c.hasDiscord);
-  const pool = discordPool.length > 0 ? discordPool : standalone;
+  // Strongly prefer packages that declare a Discord library.
+  const discordPool = selectionPool.filter((c) => c.hasDiscord);
+  const pool = discordPool.length > 0 ? discordPool : selectionPool;
+
+  // Build the candidate descriptor used by the ambiguous path.
+  function candidateDesc(c: ProjectCandidate): { label: string; dir: string; pkgJsonPath: string | null } {
+    const rel = path.relative(rootDir, c.dir) || ".";
+    const pkgJsonPath = c.kind === "node" ? path.join(c.dir, "package.json") : null;
+    const pkgName = c.kind === "node"
+      ? (typeof (c.pkg["name"]) === "string" ? c.pkg["name"] as string : null)
+      : null;
+    const displayName = pkgName ?? path.basename(c.dir);
+    const langTag = c.kind === "node"
+      ? `Node.js${c.hasDiscord ? ", discord.js" : ""}`
+      : `Python${c.hasDiscord ? ", discord.py" : ""}`;
+    const label = `${displayName} — ${rel} (${langTag})`;
+    return { label, dir: c.dir, pkgJsonPath };
+  }
 
   // Ambiguity: top two candidates within 4 score points → can't auto-pick.
   if (pool.length >= 2) {
     const [first, second] = pool as [ProjectCandidate, ProjectCandidate];
     if (Math.abs(first.score - second.score) <= 4) {
-      const ambiguousList = pool.slice(0, 5).map((c) => {
-        const rel = path.relative(rootDir, c.dir) || ".";
-        const label = c.kind === "node"
-          ? `${rel} (Node.js${c.hasDiscord ? ", discord.js" : ""})`
-          : `${rel} (Python${c.hasDiscord ? ", discord.py" : ""})`;
-        return { label, dir: c.dir };
-      });
-      return { kind: "ambiguous", candidates: ambiguousList };
+      return { kind: "ambiguous", candidates: pool.slice(0, 5).map(candidateDesc) };
     }
   }
 
@@ -963,34 +1035,29 @@ export async function hostUploadedZip(params: {
   if (rootResult.kind === "not_found") {
     return reportFailure(ticketId, fileName, "error", {
       message:
-        "No supported project was found in the ZIP.\n\n" +
-        "For a Node.js bot, include a package.json with a \"start\" script.\n" +
-        "For a Python bot, include a requirements.txt and a bot.py / main.py.",
-    });
-  }
-
-  if (rootResult.kind === "workspace_only") {
-    return reportFailure(ticketId, fileName, "error", {
-      message:
-        "The uploaded ZIP appears to be a workspace/monorepo root (it contains " +
-        "pnpm-workspace.yaml or a package.json with a \"workspaces\" field) but " +
-        "no usable bot was found inside it.\n\n" +
-        "Please upload a ZIP of the individual bot folder — the directory that " +
-        "contains your bot's own package.json — rather than the entire workspace.",
+        "No Discord bot project was found in the ZIP.\n\n" +
+        "For a Node.js bot: include a package.json that lists discord.js (or a " +
+        "compatible library) as a dependency.\n" +
+        "For a Python bot: include a requirements.txt with discord.py / py-cord / " +
+        "nextcord and a bot.py or main.py entry file.\n\n" +
+        "If you uploaded a workspace ZIP, make sure it contains at least one " +
+        "package subfolder with discord.js in its dependencies.",
     });
   }
 
   if (rootResult.kind === "ambiguous") {
-    const list = rootResult.candidates
-      .map((c) => `  • ${c.label}`)
-      .join("\n");
+    const list = rootResult.candidates.map((c, i) => {
+      const lines = [`  ${i + 1}. ${c.label}`];
+      if (c.pkgJsonPath) lines.push(`     package.json: ${c.pkgJsonPath}`);
+      return lines.join("\n");
+    }).join("\n");
     return reportFailure(ticketId, fileName, "error", {
       message:
-        "Multiple Discord bot packages were found in the ZIP and it's not " +
-        "clear which one to run:\n\n" +
+        `${rootResult.candidates.length} Discord bots were found in the ZIP — ` +
+        "please upload a ZIP of just the one you want to host:\n\n" +
         list +
-        "\n\nPlease upload a ZIP containing only the specific bot you want to host, " +
-        "rather than the whole workspace.",
+        "\n\nTip: zip only the bot's own folder (the one containing its package.json), " +
+        "not the entire workspace.",
     });
   }
 
@@ -1010,19 +1077,28 @@ export async function hostUploadedZip(params: {
     `[Lumora] Language: ${language === "node" ? "Node.js" : "Python"}\n`,
   );
 
-  // Reject if no known Discord library is present in the winning candidate.
-  // A valid Discord bot must declare discord.js, discord.py, or a compatible
-  // library. Without it, we're almost certainly looking at the wrong package.
-  if (!hasDiscord) {
+  // If no Discord library was found in package.json / requirements.txt,
+  // scan source files before giving up — the bot might have its dep unlisted
+  // or bundled, but the source code still uses discord.js patterns.
+  let discordConfirmed = hasDiscord;
+  if (!discordConfirmed) {
+    appendLiveLog(ticketId, "[Lumora] No Discord lib in deps — scanning source files…\n");
+    discordConfirmed = await scanSourceFilesForDiscord(projectRoot);
+    if (discordConfirmed) {
+      appendLiveLog(ticketId, "[Lumora] Discord usage found in source files ✓\n");
+    }
+  }
+
+  if (!discordConfirmed) {
     const hint = language === "node"
-      ? 'Make sure "discord.js" (or a compatible library) is listed under ' +
-        '"dependencies" in your bot\'s package.json.'
-      : "Make sure discord.py, nextcord, or a similar library is listed in requirements.txt.";
+      ? 'Add "discord.js" (or a compatible library such as eris / oceanic.js) ' +
+        'to "dependencies" in your bot\'s package.json.'
+      : "Add discord.py, py-cord, nextcord, or disnake to requirements.txt.";
     return reportFailure(ticketId, fileName, "error", {
       message:
-        "The uploaded ZIP does not appear to be a Discord bot — no known Discord " +
-        "library was found in the package at " +
-        `"${relRoot}".\n\n` +
+        "The uploaded ZIP does not appear to be a Discord bot.\n\n" +
+        `No Discord library was found in the package at "${relRoot}", and no ` +
+        "Discord-specific code patterns were detected in its source files.\n\n" +
         hint,
     });
   }
