@@ -4,14 +4,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   useGetSession,
   getGetSessionQueryKey,
-  useUploadBot,
   useRestartBot,
   useStopBot,
 } from '@workspace/api-client-react';
+import CreateBotModal from '@/components/CreateBotModal';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Terminal,
-  UploadCloud,
   RotateCw,
   Clock,
   AlertTriangle,
@@ -19,7 +18,6 @@ import {
   ChevronUp,
   Activity,
   Zap,
-  CheckCircle2,
   XCircle,
   Loader2,
   Key,
@@ -30,6 +28,7 @@ import {
   EyeOff,
   Files,
   PowerOff,
+  FolderOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,14 +37,6 @@ import { toast } from 'sonner';
 import FileManager from '@/components/FileManager';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
-
-type UploadOutcome = {
-  status: 'running' | 'crashed' | 'error';
-  message: string;
-  detail?: string | null;
-  startCommand?: string | null;
-  aiExplanation?: string | null;
-} | null;
 
 type EnvEntry = { key: string; value: string; hidden: boolean };
 
@@ -114,14 +105,8 @@ function getStatusMeta(status: string) {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [isDragging, setIsDragging] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const [uploadOutcome, setUploadOutcome] = useState<UploadOutcome>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Env vars state
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>([]);
@@ -129,28 +114,18 @@ export default function Dashboard() {
   const [envSaving, setEnvSaving] = useState(false);
   const [envDirty, setEnvDirty] = useState(false);
 
-  const isUploadingRef = useRef(false);
-  const botStatus = useRef<string | undefined>(undefined);
-
   const { data: session, isLoading, isError, error } = useGetSession({
     query: {
       queryKey: getGetSessionQueryKey(),
       retry: false,
       refetchInterval: (query) => {
         const s = (query.state.data as any)?.hostedBot?.status;
-        // Poll while any transient / in-progress state is active.
-        if (
-          isUploadingRef.current ||
-          s === 'installing' ||
-          s === 'starting' ||
-          s === 'connecting'   // waiting for Discord gateway signal
-        ) return 2000;
+        if (s === 'installing' || s === 'starting' || s === 'connecting') return 2000;
         return false;
       },
     },
   });
 
-  const uploadBot = useUploadBot();
   const restartBot = useRestartBot();
   const stopBot = useStopBot();
 
@@ -159,33 +134,6 @@ export default function Dashboard() {
       setLocation('/');
     }
   }, [isError, error, setLocation]);
-
-  useEffect(() => {
-    const current = session?.hostedBot?.status;
-    if (botStatus.current && botStatus.current !== current && current !== 'installing' && current !== 'starting') {
-      botStatus.current = current;
-    } else {
-      botStatus.current = current;
-    }
-  }, [session?.hostedBot?.status]);
-
-  useEffect(() => {
-    const status = session?.hostedBot?.status;
-    if (!isUploadingRef.current) return;
-    // Stay in "uploading" UI while any in-progress status is active.
-    if (!status || status === 'installing' || status === 'starting' || status === 'connecting') return;
-    isUploadingRef.current = false;
-    setIsUploading(false);
-    if (status === 'online' || status === 'running') {
-      toast.success('Bot is live and online!');
-    } else if (status === 'login_failed') {
-      toast.warning('Bot started but Discord connection failed — check your token and intents.');
-    } else if (status === 'crashed') {
-      toast.error('Bot crashed on startup — check the error logs below.');
-    } else {
-      toast.error('Deployment failed — check the error logs below.');
-    }
-  }, [session?.hostedBot?.status]);
 
   // Load env vars once we have a session
   useEffect(() => {
@@ -247,85 +195,6 @@ export default function Dashboard() {
     }
   };
 
-  const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB — must match server
-
-  const handleUpload = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-      setUploadError('Only .zip files are supported. Please select a .zip archive.');
-      return;
-    }
-    if (file.size === 0) {
-      setUploadError('The selected file is empty. Please choose a valid ZIP archive.');
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError('That file is too large. The maximum accepted size is 100 MB.');
-      return;
-    }
-
-    setUploadOutcome(null);
-    setUploadError(null);
-    setUploadProgress(0);
-    isUploadingRef.current = true;
-    setIsUploading(true);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${BASE}/api/bots/upload`, true);
-    xhr.withCredentials = true;
-    xhr.timeout = 5 * 60 * 1000; // 5 minutes
-
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        setUploadProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    });
-
-    const resetUploading = () => {
-      isUploadingRef.current = false;
-      setIsUploading(false);
-      setUploadProgress(0);
-    };
-
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 202) {
-        setUploadProgress(100);
-        queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
-        // Deployment status tracked via polling — isUploading clears when status settles
-        return;
-      }
-      // Synchronous error (bad ZIP, too large, wrong type, etc.)
-      resetUploading();
-      try {
-        const data = JSON.parse(xhr.responseText);
-        setUploadError(data?.error || 'Upload failed. Please try again.');
-      } catch {
-        setUploadError(xhr.status === 413
-          ? 'That file is too large. The maximum accepted size is 100 MB.'
-          : 'Upload failed. Please try again.');
-      }
-    });
-
-    xhr.addEventListener('error', () => {
-      resetUploading();
-      setUploadError('Upload failed. Your connection was interrupted — please try again.');
-    });
-
-    xhr.addEventListener('abort', () => {
-      resetUploading();
-      setUploadError('Upload was cancelled.');
-    });
-
-    xhr.addEventListener('timeout', () => {
-      resetUploading();
-      setUploadError('Upload timed out. Please try again with a smaller file or a faster connection.');
-    });
-
-    xhr.send(formData);
-  };
-
   const handleRestart = () => {
     restartBot.mutate(undefined, {
       onSuccess: () => {
@@ -365,7 +234,7 @@ export default function Dashboard() {
 
   const { hostedBot } = session;
   const statusMeta = hostedBot ? getStatusMeta(hostedBot.status) : null;
-  const isProcessing = isUploading ||
+  const isProcessing =
     hostedBot?.status === 'installing' ||
     hostedBot?.status === 'starting' ||
     hostedBot?.status === 'connecting';
@@ -381,6 +250,17 @@ export default function Dashboard() {
         }}
       />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,hsl(var(--primary)/0.06)_0%,transparent_70%)]" />
+
+      {/* Modal */}
+      {showCreateModal && (
+        <CreateBotModal
+          onClose={() => setShowCreateModal(false)}
+          onDeployed={() => {
+            queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
+            setShowCreateModal(false);
+          }}
+        />
+      )}
 
       <div className="relative p-4 md:p-6 max-w-6xl mx-auto space-y-6">
         {/* Header */}
@@ -401,14 +281,67 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/60 bg-card/50 text-xs font-mono text-muted-foreground">
-            <Clock className="h-3.5 w-3.5 text-primary/60" />
-            <span>EXPIRES</span>
-            <span className="text-foreground font-semibold">
-              {(() => { try { const d = new Date(session.expiresAt as unknown as string); return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true }); } catch { return '—'; } })()}
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/60 bg-card/50 text-xs font-mono text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 text-primary/60" />
+              <span>EXPIRES</span>
+              <span className="text-foreground font-semibold">
+                {(() => { try { const d = new Date(session.expiresAt as unknown as string); return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true }); } catch { return '—'; } })()}
+              </span>
+            </div>
           </div>
         </header>
+
+        {/* Your Projects */}
+        <div className="rounded-xl border border-border/60 bg-card/30 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-primary/70" />
+              <span className="font-mono text-xs font-bold tracking-widest text-foreground">YOUR PROJECTS</span>
+            </div>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              size="sm"
+              className="h-8 font-mono text-[10px] tracking-widest bg-primary/90 hover:bg-primary text-primary-foreground border-0"
+              style={{ boxShadow: '0 0 14px hsl(var(--primary)/0.25)' }}
+            >
+              <Plus className="h-3 w-3 mr-1.5" />
+              DEPLOY BOT
+            </Button>
+          </div>
+
+          {hostedBot ? (
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg border border-border/50 bg-background/60 flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-primary/60" />
+                </div>
+                <div>
+                  <p className="text-sm font-mono font-semibold text-foreground">{hostedBot.fileName}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/60">
+                    {hostedBot.lastStartedAt
+                      ? `Started ${formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true })}`
+                      : 'Not yet started'}
+                  </p>
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                className={`font-mono text-[10px] px-2.5 py-0.5 flex items-center gap-1.5 ${statusMeta?.color}`}
+                style={{ boxShadow: statusMeta?.glow }}
+              >
+                {statusMeta?.icon}
+                {statusMeta?.label}
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg border border-dashed border-border/40">
+              <Activity className="h-6 w-6 text-muted-foreground/30 mb-2" />
+              <p className="text-xs font-mono text-muted-foreground/50 tracking-wider">NO BOT DEPLOYED</p>
+              <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Click "Deploy Bot" to get started</p>
+            </div>
+          )}
+        </div>
 
         <Tabs defaultValue="overview" className="space-y-5">
           <TabsList className="font-mono text-xs tracking-widest bg-background/60 border border-border/50 h-9">
@@ -512,34 +445,6 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-
-            {/* Upload Outcome Banner */}
-            {uploadOutcome && (
-              <div
-                className={`rounded-xl border p-4 ${
-                  uploadOutcome.status === 'running'
-                    ? 'border-emerald-500/25 bg-emerald-500/5'
-                    : 'border-red-500/25 bg-red-500/5'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  {uploadOutcome.status === 'running' ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-red-400 shrink-0" />
-                  )}
-                  <span className={`font-mono text-xs font-bold tracking-wider ${uploadOutcome.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {uploadOutcome.status === 'running' ? 'DEPLOYMENT SUCCESSFUL' : 'DEPLOYMENT FAILED'}
-                  </span>
-                </div>
-                <p className="text-xs font-mono text-muted-foreground mb-2">{uploadOutcome.message}</p>
-                {uploadOutcome.detail && (
-                  <pre className="text-[10px] font-mono text-muted-foreground/70 bg-background/60 rounded-lg p-3 overflow-x-auto max-h-32 border border-border/30 whitespace-pre-wrap">
-                    {uploadOutcome.detail}
-                  </pre>
-                )}
-              </div>
-            )}
 
             {/* AI Repair Status */}
             {hostedBot && (hostedBot as any).repairAttempts > 0 && (hostedBot.status === 'crashed' || hostedBot.status === 'error') && (
@@ -700,119 +605,40 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-5">
-            {/* Upload Zone */}
+            {/* Deploy card */}
             <div className="rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-border/40">
                 <span className="font-mono text-xs text-muted-foreground tracking-widest">DEPLOYMENT</span>
               </div>
-              <div className="p-4">
-                <div
-                  className={`
-                    relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer select-none
-                    ${isDragging
-                      ? 'border-primary/60 bg-primary/5 scale-[1.02]'
-                      : isUploading
-                      ? 'border-blue-500/40 bg-blue-500/5'
-                      : 'border-border/40 hover:border-primary/40 hover:bg-primary/3'
-                    }
-                  `}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDragging(false);
-                    const file = e.dataTransfer.files[0];
-                    if (file) handleUpload(file);
-                  }}
-                  onClick={() => !isUploading && fileInputRef.current?.click()}
+              <div className="p-4 space-y-3">
+                {isProcessing && (
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 text-blue-400 animate-spin shrink-0" />
+                    <div>
+                      <p className="text-xs font-mono font-bold text-blue-400 tracking-wider">
+                        {hostedBot?.status === 'installing' ? 'INSTALLING DEPS...' : hostedBot?.status === 'starting' ? 'STARTING BOT...' : 'CONNECTING...'}
+                      </p>
+                      <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">Please wait, this may take a minute</p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="w-full rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/3 p-6 flex flex-col items-center gap-2 transition-all text-center"
                 >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept=".zip"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUpload(file);
-                      e.target.value = '';
-                    }}
-                  />
-
-                  {isUploading ? (
-                    <div className="flex flex-col items-center gap-3 w-full">
-                      <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
-                      <div className="w-full text-center">
-                        <p className="font-mono text-xs text-blue-400 font-bold tracking-wider">
-                          {uploadProgress < 100
-                            ? `UPLOADING… ${uploadProgress}%`
-                            : hostedBot?.status === 'installing'
-                            ? 'INSTALLING DEPS...'
-                            : hostedBot?.status === 'starting'
-                            ? 'STARTING BOT...'
-                            : 'PROCESSING...'}
-                        </p>
-                        {uploadProgress > 0 && uploadProgress < 100 && (
-                          <div className="mt-2 mx-4 bg-blue-500/10 rounded-full h-1 overflow-hidden">
-                            <div
-                              className="h-full bg-blue-400 rounded-full transition-all duration-150"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                        )}
-                        <p className="text-[10px] font-mono text-muted-foreground/60 mt-1.5">
-                          {uploadProgress < 100
-                            ? 'Do not close this tab'
-                            : hostedBot?.status === 'installing'
-                            ? 'May take several minutes for large projects'
-                            : 'Please wait...'}
-                        </p>
-                      </div>
-                    </div>
-                  ) : uploadError ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="h-10 w-10 rounded-full border border-red-500/40 bg-red-500/10 flex items-center justify-center">
-                        <XCircle className="h-5 w-5 text-red-400" />
-                      </div>
-                      <div>
-                        <p className="font-mono text-xs font-bold tracking-wider text-red-400">UPLOAD FAILED</p>
-                        <p className="text-[10px] font-mono text-red-300/70 mt-1 max-w-[180px] text-center leading-relaxed">
-                          {uploadError}
-                        </p>
-                        <p className="text-[10px] font-mono text-muted-foreground/50 mt-2">Click to try again</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="h-10 w-10 rounded-full border border-border/60 bg-background/60 flex items-center justify-center">
-                        <UploadCloud className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-mono text-xs font-bold tracking-wider text-foreground">UPLOAD ZIP</p>
-                        <p className="text-[10px] font-mono text-muted-foreground/60 mt-1">
-                          Drag & drop or click to browse
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Requirements */}
-                <div className="mt-4 space-y-1.5">
-                  {[
-                    'Add secrets above before uploading',
-                    'package.json with "start" script',
-                    'Max 100MB zip size',
-                  ].map((req, i) => (
-                    <div key={req} className="flex items-center gap-2">
-                      <span className={`text-[10px] ${i === 0 ? 'text-violet-400/70' : 'text-primary/40'}`}>▸</span>
-                      <span className={`text-[10px] font-mono ${i === 0 ? 'text-violet-300/70' : 'text-muted-foreground/60'}`}>{req}</span>
+                  <div className="h-10 w-10 rounded-full border border-border/50 bg-background/60 flex items-center justify-center">
+                    <Plus className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="font-mono text-xs font-bold tracking-wider text-foreground">DEPLOY NEW BOT</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/60">ZIP upload or GitHub import</p>
+                </button>
+                <div className="space-y-1.5">
+                  {['Add secrets before deploying', 'Python · Node.js · Java supported', 'Max 100MB zip'].map((r, i) => (
+                    <div key={r} className="flex items-center gap-2">
+                      <span className={`text-[10px] ${i === 0 ? 'text-violet-400/60' : 'text-primary/40'}`}>▸</span>
+                      <span className={`text-[10px] font-mono ${i === 0 ? 'text-violet-300/60' : 'text-muted-foreground/50'}`}>{r}</span>
                     </div>
                   ))}
-                  {uploadError && (
-                    <div className="mt-3 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2">
-                      <p className="text-[10px] font-mono text-red-400 leading-relaxed">{uploadError}</p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

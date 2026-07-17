@@ -13,7 +13,7 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form';
-import { KeyRound, Zap } from 'lucide-react';
+import { KeyRound, Zap, ArrowLeft } from 'lucide-react';
 
 const redeemSchema = z.object({
   key: z.string().min(1, 'Access key is required'),
@@ -57,6 +57,15 @@ export default function Redeem() {
       />
       {/* Radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.08)_0%,transparent_70%)]" />
+
+      {/* Back to home */}
+      <button
+        onClick={() => setLocation('/')}
+        className="absolute top-5 left-5 flex items-center gap-1.5 text-xs font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back
+      </button>
 
       <div className="relative w-full max-w-sm space-y-8">
         {/* Logo */}

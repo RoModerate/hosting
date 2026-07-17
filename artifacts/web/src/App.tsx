@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import NotFound from '@/pages/not-found';
+import Landing from '@/pages/Landing';
 import Redeem from '@/pages/Redeem';
 import Dashboard from '@/pages/Dashboard';
 import Admin from '@/pages/Admin';
@@ -13,7 +14,8 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Redeem} />
+      <Route path="/" component={Landing} />
+      <Route path="/login" component={Redeem} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
