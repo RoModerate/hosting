@@ -34,7 +34,11 @@ import { runAutonomousAgent } from "./aiAgent";
 
 export const MAX_ZIP_BYTES = 100 * 1024 * 1024; // 100MB
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — large monorepos can be slow
-const STARTUP_PROBE_MS = 8 * 1000;
+// How long to wait for the bot process to emit a Discord ready/failure signal.
+// The probe resolves early the moment a signal is detected; this is the hard cap.
+const STARTUP_PROBE_MS = 90 * 1000; // 90 seconds
+// After this much time with no crash, transition status from "starting" → "connecting"
+const STARTUP_CONNECTING_DELAY_MS = 8 * 1000;
 const OUTPUT_TAIL_CHARS = 3500;
 const AUTO_RESTART_BASE_DELAY_MS = 3000;
 
@@ -149,6 +153,13 @@ const DISCORD_ONLINE_PATTERNS: RegExp[] = [
   /connected to discord/i,
   /discord.*client.*ready/i,
   /gateway.*\bconnected\b/i,   // "gateway connected" — avoid matching "connection failed"
+  /BOT_READY/,                  // explicit signal: console.log("BOT_READY") in client.once("ready")
+  /\[ready\]/i,                 // "[READY]" style log prefix
+  /startup complete/i,
+  /all shards.*ready/i,
+  /shard\s+\d+.*ready/i,
+  /ws.*open/i,                  // low-level WebSocket open log
+  /heartbeat.*ack/i,            // discord.js internal: "Heartbeat ack"
 ];
 
 /** Patterns that indicate Discord login failed (process may still be running). */
@@ -167,10 +178,13 @@ const DISCORD_FAIL_PATTERNS: RegExp[] = [
 
 interface StartupProbeResult {
   child: ChildProcess;
+  /** True if the process exited on its own or was killed due to timeout. */
   crashed: boolean;
+  /** True when crashed due to the 90-second timeout (bot was alive but silent). */
+  timedOut: boolean;
   exitCode: number | null;
   output: string;
-  /** Discord gateway signal detected during the probe window, or null if none yet. */
+  /** Discord gateway signal detected during the probe window, or null if none. */
   discordSignal: "online" | "login_failed" | null;
 }
 
@@ -506,6 +520,20 @@ function diagnoseBotCrash(
   return null; // no known pattern matched — let caller use generic message
 }
 
+/**
+ * Launches the bot process and monitors it for up to STARTUP_PROBE_MS (90s).
+ *
+ * Key behaviours:
+ *  - Resolves IMMEDIATELY when a Discord ready or failure signal is seen in output.
+ *    Does NOT wait the full 90s when the bot connects quickly.
+ *  - After STARTUP_CONNECTING_DELAY_MS (8s) of silence with a live process,
+ *    upgrades the DB status from "starting" → "connecting" so the UI shows
+ *    progress without spinning forever on "Starting bot process".
+ *  - On process crash: resolves with crashed=true.
+ *  - On 90s timeout (alive but no Discord signal): kills the process and returns
+ *    crashed=true, timedOut=true — callers should feed the captured log into
+ *    the AI repair system.
+ */
 function runStartupProbe(
   cmd: string,
   args: string[],
@@ -513,8 +541,6 @@ function runStartupProbe(
   ticketId: number,
   userVars: Record<string, string>,
 ): Promise<StartupProbeResult> {
-  // Write the diagnostic banner to the live log BEFORE spawning so customers
-  // can see it at the very top of the startup output.
   appendStartupDiagnosticBanner(ticketId, userVars);
   appendLiveLog(ticketId, "[Discord] Connecting...\n");
 
@@ -529,31 +555,60 @@ function runStartupProbe(
       env: botEnv(ticketId, userVars),
     });
 
-    /** Scan each output chunk for Discord gateway signals. */
+    /** Settle and resolve exactly once. */
+    const settle = (result: StartupProbeResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      clearTimeout(connectingTimer);
+      resolve(result);
+    };
+
+    // After 8s with a live process, switch status to "connecting" so the UI
+    // doesn't show "Starting bot process" indefinitely.
+    const connectingTimer = setTimeout(() => {
+      if (settled) return;
+      db.update(hostedBotsTable)
+        .set({ status: "connecting" })
+        .where(eq(hostedBotsTable.ticketId, ticketId))
+        .catch(() => undefined);
+      appendLiveLog(
+        ticketId,
+        "[Lumora] Process is alive — waiting for Discord ready signal " +
+        `(up to ${Math.round((STARTUP_PROBE_MS - STARTUP_CONNECTING_DELAY_MS) / 1000)}s remaining)...\n` +
+        "[Lumora] Tip: add  console.log('BOT_READY')  inside client.once('ready', () => { ... })\n" +
+        "[Lumora]      to let Lumora detect the connection faster.\n",
+      );
+    }, STARTUP_CONNECTING_DELAY_MS);
+
+    /** Scan each output chunk for Discord gateway signals; resolve immediately on match. */
     const checkSignal = (text: string) => {
-      if (discordSignal) return; // already found one — don't overwrite
+      if (discordSignal || settled) return;
+
       if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(text))) {
         discordSignal = "online";
-        // Try to extract the username discord.js logs ("Logged in as Bot#1234").
         const match = text.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
         const who = match?.[1]?.trim();
         appendLiveLog(
           ticketId,
           `[Discord] ✓ Login successful${who ? ` — bot online as ${who}` : ""}.\n`,
         );
-        // Persist bot name so the dashboard can display "Online as BotName#0000".
         if (who) {
           db.update(hostedBotsTable)
             .set({ botName: who })
             .where(eq(hostedBotsTable.ticketId, ticketId))
             .catch(() => undefined);
         }
+        // Resolve early — no need to wait the full 90s.
+        settle({ child, crashed: false, timedOut: false, exitCode: null, output, discordSignal: "online" });
       } else if (DISCORD_FAIL_PATTERNS.some((p) => p.test(text))) {
         discordSignal = "login_failed";
         appendLiveLog(
           ticketId,
-          "[Discord] Login failed — check your bot token and gateway intents.\n",
+          "[Discord] ✗ Login failed — check your bot token and gateway intents.\n",
         );
+        // Resolve early so the caller can report the failure immediately.
+        settle({ child, crashed: false, timedOut: false, exitCode: null, output, discordSignal: "login_failed" });
       }
     };
 
@@ -570,25 +625,39 @@ function runStartupProbe(
       checkSignal(text);
     });
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve({ child, crashed: false, exitCode: null, output, discordSignal });
+    // 90-second hard timeout — bot is alive but never sent a Discord signal.
+    const hardTimer = setTimeout(() => {
+      const logMsg =
+        "\n[Lumora] ────────────────────────────────────────────────────────\n" +
+        "[Lumora] ⚠  90-second startup timeout reached.\n" +
+        "[Lumora]    The bot process started but never sent a Discord\n" +
+        "[Lumora]    ready signal within the allowed window.\n" +
+        "[Lumora]\n" +
+        "[Lumora]    Common causes:\n" +
+        "[Lumora]      • The bot never calls client.login() or discord.run()\n" +
+        "[Lumora]      • Missing or wrong DISCORD_BOT_TOKEN secret\n" +
+        "[Lumora]      • A silent async error is swallowed before login()\n" +
+        "[Lumora]      • The bot prints ready in an unrecognised format\n" +
+        "[Lumora]\n" +
+        "[Lumora]    To make Lumora detect connection instantly, add:\n" +
+        "[Lumora]      client.once('ready', () => {\n" +
+        "[Lumora]        console.log('BOT_READY')  // ← Lumora detects this\n" +
+        "[Lumora]      })\n" +
+        "[Lumora]\n" +
+        "[Lumora]    Sending captured output to AI repair system...\n" +
+        "[Lumora] ────────────────────────────────────────────────────────\n";
+      appendLiveLog(ticketId, logMsg);
+      child.kill("SIGTERM");
+      settle({ child, crashed: true, timedOut: true, exitCode: null, output, discordSignal });
     }, STARTUP_PROBE_MS);
 
     child.once("exit", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ child, crashed: true, exitCode: code, output, discordSignal });
+      settle({ child, crashed: true, timedOut: false, exitCode: code, output, discordSignal });
     });
 
     child.once("error", (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
       output = tail(output + `\n${err.message}`, OUTPUT_TAIL_CHARS);
-      resolve({ child, crashed: true, exitCode: null, output, discordSignal });
+      settle({ child, crashed: true, timedOut: false, exitCode: null, output, discordSignal });
     });
   });
 }
@@ -1403,15 +1472,13 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
 
     if (!probe.crashed) {
       const repairStatus: HostStatus =
-        probe.discordSignal === "online" ? "online" :
-        probe.discordSignal === "login_failed" ? "login_failed" :
-        "connecting";
+        probe.discordSignal === "online" ? "online" : "login_failed";
 
       appendLiveLog(
         ticketId,
         repairStatus === "online"
           ? "[Lumora] ✓ Bot is online and connected to Discord after auto-repair.\n"
-          : "[Lumora] ✓ Bot process is running after auto-repair — waiting for Discord connection.\n",
+          : "[Lumora] ✓ Bot process started after auto-repair — Discord login failed, check your token.\n",
       );
       attachSupervision(ticketId, probe.child, onCrash);
       await updateHostedBot(ticketId, {
@@ -1424,9 +1491,6 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
         startCommand: resolvedStart.label,
         recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
       });
-      if (repairStatus === "connecting") {
-        watchForDiscordReady(ticketId);
-      }
       return { fixed: true, friendlyMessage: repair.friendlyMessage, lastOutput: probe.output };
     }
 
@@ -1445,95 +1509,10 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
   };
 }
 
-/**
- * After attaching supervision, poll the live log for Discord gateway signals
- * for up to `timeoutMs` ms. Upgrades the DB status from "connecting" to
- * "online" or "login_failed" as signals are detected.
- *
- * Fire-and-forget — never throws.
- */
-function watchForDiscordReady(ticketId: number, timeoutMs = 20_000): void {
-  const startedAt = Date.now();
-  // Scan the full live log from the start on every poll, not just new chunks.
-  // This catches failure patterns that were logged before the watcher started
-  // (e.g. during the 8s startup probe) as well as patterns that span poll boundaries.
-
-  function poll(): void {
-    try {
-      const fullLog = getLiveLog(ticketId);
-
-      // ── Check for Discord online signal anywhere in the log ───────────────
-      if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(fullLog))) {
-        const match = fullLog.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
-        const who = match?.[1]?.trim();
-        if (who) {
-          appendLiveLog(ticketId, `[Discord] ✓ Bot online as ${who}\n`);
-        }
-        logger.info({ ticketId, who }, "Discord client.ready detected via live log watcher");
-        db.update(hostedBotsTable)
-          .set({ status: "online", ...(who ? { botName: who } : {}) })
-          .where(eq(hostedBotsTable.ticketId, ticketId))
-          .catch((err: unknown) => logger.error({ err }, "Failed to set discord online status"));
-        return; // done
-      }
-
-      // ── Check for known Discord failure patterns ───────────────────────────
-      if (DISCORD_FAIL_PATTERNS.some((p) => p.test(fullLog))) {
-        logger.warn({ ticketId }, "Discord login failure detected via live log watcher");
-        db.update(hostedBotsTable)
-          .set({
-            status: "login_failed",
-            errorMessage:
-              "Discord connection failed. Check your bot token (DISCORD_TOKEN or DISCORD_BOT_TOKEN) " +
-              "and that Gateway Intents are enabled in the Discord Developer Portal.",
-          })
-          .where(eq(hostedBotsTable.ticketId, ticketId))
-          .catch((err: unknown) => logger.error({ err }, "Failed to set login_failed status"));
-        return; // done
-      }
-
-      // ── Process died — crash handler takes over ────────────────────────────
-      if (!isRunning(ticketId)) return;
-
-      // ── Watchdog timeout ───────────────────────────────────────────────────
-      if (Date.now() - startedAt >= timeoutMs) {
-        logger.warn({ ticketId }, "Discord ready watcher timed out after 20s — setting crashed, NOT auto-restarting");
-        appendLiveLog(
-          ticketId,
-          "[Lumora] ⚠ Bot did not connect to Discord within 20 seconds.\n" +
-          "[Lumora] The bot process is running but silent. Common causes:\n" +
-          "[Lumora]   • Missing or wrong DISCORD_TOKEN / DISCORD_BOT_TOKEN env var\n" +
-          "[Lumora]   • Bot code never calls client.login() or discord.run()\n" +
-          "[Lumora]   • Async startup error that doesn't crash the process\n" +
-          "[Lumora] Use the AI Assistant tab to diagnose and fix this automatically.\n",
-        );
-        // Kill the silent process but do NOT schedule an auto-restart.
-        // Auto-restarting a bot with a bad token or missing login call just
-        // loops forever (starting → connecting → 20s → starting → ...).
-        // The user can see the error, use the AI chat to fix it, then restart manually.
-        stopProcess(ticketId);
-        db.update(hostedBotsTable)
-          .set({
-            status: "crashed",
-            errorMessage:
-              "Bot started but never connected to Discord (20s timeout). " +
-              "Most likely cause: missing or wrong DISCORD_TOKEN env var, or the bot code " +
-              "never calls client.login(). Use the AI Assistant to diagnose this.",
-            recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
-          })
-          .where(eq(hostedBotsTable.ticketId, ticketId))
-          .catch((err: unknown) => logger.error({ err }, "Failed to set watchdog-timeout status"));
-        return; // STOP — do not auto-restart
-      }
-
-      setTimeout(poll, 500);
-    } catch (err) {
-      logger.warn({ err, ticketId }, "watchForDiscordReady poll threw unexpectedly");
-    }
-  }
-
-  setTimeout(poll, 400); // first check shortly after supervision is attached
-}
+// watchForDiscordReady has been removed.
+// The startup probe now handles the full 90-second monitoring window and
+// resolves immediately when a Discord signal is detected, so no separate
+// post-probe poller is needed.
 
 function attachSupervision(
   ticketId: number,
@@ -2053,11 +2032,10 @@ export async function hostUploadedZip(params: {
     });
   }
 
-  // Determine initial Discord status from signals seen during the probe window.
+  // The probe resolves early on signal, so crashed=false only means
+  // online or login_failed — there is no "connecting" outcome.
   const initialStatus: HostStatus =
-    probe.discordSignal === "online" ? "online" :
-    probe.discordSignal === "login_failed" ? "login_failed" :
-    "connecting";
+    probe.discordSignal === "online" ? "online" : "login_failed";
 
   attachSupervision(ticketId, probe.child, onCrash);
   await updateHostedBot(ticketId, {
@@ -2070,18 +2048,12 @@ export async function hostUploadedZip(params: {
     recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
-  if (initialStatus === "connecting") {
-    watchForDiscordReady(ticketId);
-  }
-
   return {
     status: initialStatus,
     message:
       initialStatus === "online"
         ? "The bot is running and connected to Discord."
-        : initialStatus === "login_failed"
-        ? "The bot process started, but Discord connection failed. Check your token and intents."
-        : "The bot process started and is connecting to Discord.",
+        : "The bot process started, but Discord connection failed. Check your token and intents.",
     startCommand: startCommand.label,
   };
 }
@@ -2231,10 +2203,9 @@ export async function restartHostedBot(
     });
   }
 
+  // Probe resolves early on signal, so crashed=false only means online or login_failed.
   const restartStatus: HostStatus =
-    probe.discordSignal === "online" ? "online" :
-    probe.discordSignal === "login_failed" ? "login_failed" :
-    "connecting";
+    probe.discordSignal === "online" ? "online" : "login_failed";
 
   attachSupervision(ticketId, probe.child, onCrash);
   await updateHostedBot(ticketId, {
@@ -2248,18 +2219,12 @@ export async function restartHostedBot(
     recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
-  if (restartStatus === "connecting") {
-    watchForDiscordReady(ticketId);
-  }
-
   return {
     status: restartStatus,
     message:
       restartStatus === "online"
         ? "The bot was restarted and connected to Discord."
-        : restartStatus === "login_failed"
-        ? "The bot process restarted, but Discord connection failed."
-        : "The bot process restarted and is connecting to Discord.",
+        : "The bot process restarted, but Discord connection failed.",
   };
 }
 
