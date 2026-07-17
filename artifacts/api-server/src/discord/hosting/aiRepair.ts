@@ -274,19 +274,26 @@ export async function analyzeAndFixBeforeLaunch(params: {
 }
 
 /**
- * Returns a copy of userVars where the canonical DISCORD_BOT_TOKEN is set
- * from whichever alias the customer provided, if the canonical is not already set.
+ * Returns a copy of userVars where ALL known token variable names are set to
+ * the same value — so a bot works regardless of which env var name it reads
+ * (DISCORD_BOT_TOKEN, DISCORD_TOKEN, BOT_TOKEN, TOKEN, etc.).
  * The original userVars are never mutated.
  */
 export function resolveTokenAlias(userVars: Record<string, string>): Record<string, string> {
-  if (userVars[CANONICAL_TOKEN_VAR]?.trim()) return userVars;
-  for (const alias of TOKEN_VAR_ALIASES) {
-    const val = userVars[alias]?.trim();
-    if (val) {
-      return { ...userVars, [CANONICAL_TOKEN_VAR]: val };
-    }
-  }
-  return userVars;
+  // Find the token value from canonical name first, then any alias
+  const tokenValue =
+    userVars[CANONICAL_TOKEN_VAR]?.trim() ||
+    TOKEN_VAR_ALIASES.reduce<string>((v, alias) => v || userVars[alias]?.trim() || "", "");
+
+  if (!tokenValue) return userVars;
+
+  // Inject ALL known names so the bot reads the token no matter which var it uses
+  const aliasEntries = TOKEN_VAR_ALIASES.map((alias) => [alias, tokenValue] as [string, string]);
+  return {
+    ...userVars,
+    [CANONICAL_TOKEN_VAR]: tokenValue,
+    ...Object.fromEntries(aliasEntries),
+  };
 }
 
 // ─── AI-powered crash repair ──────────────────────────────────────────────────
@@ -383,6 +390,7 @@ async function callRepairAI(params: {
         model: MODEL,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
+        max_tokens: 1500,
       }),
     });
 

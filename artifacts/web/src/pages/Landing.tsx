@@ -32,7 +32,7 @@ export default function Landing() {
       {/* ─── Nav ─── */}
       <nav className="sticky top-0 z-30 flex items-center justify-between h-14 px-6 md:px-12 border-b border-white/[0.06] bg-[#0b0b0f]/90 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <img src="/lumora-icon.png" alt="Lumora" className="h-6 w-6 object-contain" />
+          <img src="/lumora-icon.png" alt="Lumora" className="h-8 w-8 object-contain" />
           <span className="font-mono font-bold text-sm tracking-[0.2em] text-white">LUMORA</span>
         </div>
 
@@ -115,60 +115,61 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Mock dashboard — bot card only, no fake console */}
-        <div className="flex-1 w-full max-w-lg">
-          <div className="rounded-xl border border-white/[0.07] overflow-hidden bg-[#111116]">
-            {/* Window chrome */}
-            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/[0.06] bg-[#0e0e13]">
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              <div className="flex items-center gap-2 ml-3">
-                <img src="/lumora-icon.png" alt="" className="h-3 w-3 object-contain opacity-40" />
-                <span className="text-[10px] font-mono text-white/25">lumora.host — portal</span>
+        {/* Portal preview */}
+        <div className="flex-1 w-full max-w-[480px]">
+          <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-[#0e0e13] font-mono">
+            {/* Title bar */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.07] bg-[#111116]">
+              <img src="/lumora-icon.png" alt="" className="h-4 w-4 object-contain opacity-50" />
+              <span className="text-[11px] text-white/35 tracking-wide">lumora.host</span>
+              <span className="text-white/15 mx-1">—</span>
+              <span className="text-[11px] text-white/25">portal</span>
+            </div>
+
+            {/* Status row */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+              <div>
+                <div className="text-[11px] text-white/65 font-semibold">my-discord-bot.zip</div>
+                <div className="text-[10px] text-white/25 mt-0.5">node index.js</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="text-[10px] text-emerald-400 font-semibold tracking-wider">ONLINE</span>
               </div>
             </div>
 
-            <div className="p-5 space-y-3">
-              {/* Bot card */}
-              <div className="rounded-lg border border-white/[0.07] bg-[#0e0e13] p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-xs font-mono text-white/70 font-semibold">my-discord-bot.zip</div>
-                    <div className="text-[10px] font-mono text-white/30 mt-0.5">Active deployment</div>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    <span className="text-[9px] font-mono text-emerald-400 font-bold tracking-wider">ONLINE</span>
-                  </div>
+            {/* Stats */}
+            <div className="grid grid-cols-3 divide-x divide-white/[0.05] border-b border-white/[0.06]">
+              {[['RESTARTS', '0'], ['UPTIME', '3d 4h'], ['REPAIRS', '0']].map(([k, v]) => (
+                <div key={k} className="px-4 py-3">
+                  <div className="text-[9px] text-white/25 mb-1">{k}</div>
+                  <div className="text-[11px] text-white/55">{v}</div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[['RESTARTS', '0'], ['UPTIME', '3d 4h'], ['CMD', 'node index.js']].map(([k, v]) => (
-                    <div key={k} className="rounded-md bg-[#16161c] border border-white/[0.05] p-2">
-                      <div className="text-[8px] font-mono text-white/25 mb-0.5">{k}</div>
-                      <div className="text-[9px] font-mono text-white/55 truncate">{v}</div>
-                    </div>
-                  ))}
+              ))}
+            </div>
+
+            {/* Console output */}
+            <div className="px-4 py-3 border-b border-white/[0.05]">
+              <div className="text-[9px] text-white/25 mb-2 tracking-wider">CONSOLE</div>
+              <div className="space-y-1 text-[10px] text-white/40">
+                <div>{'>'} Logged in as MyBot#1234</div>
+                <div>{'>'} Serving 142 guilds · 8,204 members</div>
+                <div>{'>'} Commands synced (42 global)</div>
+                <div className="flex items-center gap-1 text-white/20">
+                  <span>{'>'}</span>
+                  <span className="inline-block w-1.5 h-2.5 bg-white/20 animate-pulse" />
                 </div>
               </div>
+            </div>
 
-              {/* AI agent preview */}
-              <div className="rounded-lg border border-white/[0.06] bg-[#0e0e13] p-3">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <Zap className="h-3 w-3 text-[#5c6cf5]" />
-                  <span className="text-[9px] font-mono text-white/30 tracking-wider">AI AGENT</span>
-                </div>
-                <div className="space-y-1.5">
-                  <div className="rounded-md bg-[#16161c] px-2.5 py-1.5 text-[9px] font-mono text-white/40 max-w-[80%]">
-                    Bot is online. All systems healthy.
-                  </div>
-                  <div className="rounded-md bg-[#3d4df0]/15 border border-[#5c6cf5]/15 px-2.5 py-1.5 text-[9px] font-mono text-[#9aa3f5] max-w-[80%] ml-auto text-right">
-                    Why did it crash last time?
-                  </div>
-                  <div className="rounded-md bg-[#16161c] px-2.5 py-1.5 text-[9px] font-mono text-white/40 leading-relaxed">
-                    Missing DISCORD_TOKEN — add it in Secrets tab and restart.
-                  </div>
-                </div>
+            {/* AI agent strip */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <img src="/lumora-icon.png" alt="" className="h-3.5 w-3.5 object-contain opacity-50" />
+                <span className="text-[9px] text-white/30 tracking-wider">AI AGENT</span>
+              </div>
+              <div className="text-[10px] text-white/35 leading-relaxed">
+                All systems healthy. Bot has been online for 3 days without issues.
               </div>
             </div>
           </div>
@@ -230,7 +231,7 @@ export default function Landing() {
       {/* ─── Footer ─── */}
       <footer className="border-t border-white/[0.06] px-6 md:px-12 py-7 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <img src="/lumora-icon.png" alt="" className="h-4 w-4 object-contain opacity-30" />
+          <img src="/lumora-icon.png" alt="" className="h-6 w-6 object-contain opacity-25" />
           <span className="font-mono text-xs text-white/25 tracking-widest">LUMORA</span>
         </div>
         <p className="text-xs text-white/20 font-mono">© 2025 Lumora · Secure Bot Hosting</p>

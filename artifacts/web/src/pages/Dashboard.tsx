@@ -39,7 +39,11 @@ import FileManager from '@/components/FileManager';
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
 type EnvEntry = { key: string; value: string; hidden: boolean };
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  toolResults?: Array<{ tool: string; result: string }>;
+};
 
 // ─── Status config ─────────────────────────────────────────────────────────
 const STATUS_META: Record<string, { label: string; dot: string; text: string; border: string; bg: string }> = {
@@ -175,9 +179,13 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [...messages, userMsg] }),
       });
-      const data = await r.json() as { content?: string; error?: string };
+      const data = await r.json() as { content?: string; error?: string; toolResults?: Array<{ tool: string; result: string }> };
       if (!r.ok) throw new Error(data.error || 'Request failed');
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.content ?? '' }]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: data.content ?? '',
+        toolResults: data.toolResults?.length ? data.toolResults : undefined,
+      }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, {
         role: 'assistant',
@@ -201,27 +209,42 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {m.role === 'assistant' && (
-              <div className="h-5 w-5 rounded-full bg-[#3d4df0]/20 border border-[#5c6cf5]/20 flex items-center justify-center shrink-0 mt-0.5 mr-2">
-                <Zap className="h-2.5 w-2.5 text-[#5c6cf5]" />
+          <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+            <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
+              {m.role === 'assistant' && (
+                <div className="h-5 w-5 rounded-full overflow-hidden shrink-0 mt-0.5 mr-2 border border-white/10">
+                  <img src="/lumora-icon.png" alt="" className="h-full w-full object-contain" />
+                </div>
+              )}
+              <div
+                className={`max-w-[85%] rounded-xl px-3 py-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words ${
+                  m.role === 'user'
+                    ? 'bg-[#3d4df0]/15 border border-[#5c6cf5]/15 text-[#a0aaff]'
+                    : 'bg-[#16161c] border border-white/[0.06] text-white/55'
+                }`}
+              >
+                {m.content}
+              </div>
+            </div>
+            {/* Tool actions taken */}
+            {m.toolResults && m.toolResults.length > 0 && (
+              <div className="ml-7 mt-1 space-y-1">
+                {m.toolResults.map((tr, j) => (
+                  <div key={j} className="flex items-center gap-1.5 text-[9px] font-mono text-white/25">
+                    <span className="text-emerald-500/60">✓</span>
+                    <span>{tr.tool === 'write_file' ? 'File written' : tr.tool === 'restart_bot' ? 'Bot restarted' : tr.tool}</span>
+                    <span className="text-white/15">·</span>
+                    <span className="text-white/20 truncate max-w-[220px]">{tr.result.replace(/^[✓×] /, '')}</span>
+                  </div>
+                ))}
               </div>
             )}
-            <div
-              className={`max-w-[85%] rounded-xl px-3 py-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words ${
-                m.role === 'user'
-                  ? 'bg-[#3d4df0]/15 border border-[#5c6cf5]/15 text-[#a0aaff]'
-                  : 'bg-[#16161c] border border-white/[0.06] text-white/55'
-              }`}
-            >
-              {m.content}
-            </div>
           </div>
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="h-5 w-5 rounded-full bg-[#3d4df0]/20 border border-[#5c6cf5]/20 flex items-center justify-center shrink-0 mt-0.5 mr-2">
-              <Zap className="h-2.5 w-2.5 text-[#5c6cf5]" />
+            <div className="h-5 w-5 rounded-full overflow-hidden shrink-0 mt-0.5 mr-2 border border-white/10">
+              <img src="/lumora-icon.png" alt="" className="h-full w-full object-contain" />
             </div>
             <div className="bg-[#16161c] border border-white/[0.06] rounded-xl px-3 py-2">
               <Loader2 className="h-3 w-3 text-white/25 animate-spin" />
