@@ -682,7 +682,12 @@ const ENTRY_FILES = [
   "index.js", "index.mjs", "index.cjs",
   "bot.js", "bot.mjs",
   "main.js", "main.mjs",
-  "app.js", "server.js", "src/index.js", "src/bot.js",
+  "app.js", "server.js",
+  "src/index.js", "src/index.mjs",
+  "src/main.js", "src/main.mjs",
+  "src/bot.js",
+  "dist/index.js", "dist/index.mjs",
+  "dist/main.js",
 ];
 
 // Python entry files, tried in order of preference.
@@ -1033,11 +1038,29 @@ export async function hostUploadedZip(params: {
   await updateHostedBot(ticketId, { language });
 
   // ── Dependency installation ─────────────────────────────────────────────
+  // Log all critical details before any subprocess is launched so a mis-routed
+  // process is immediately visible in the live log.
+  const pkgJsonPath = language === "node" ? path.join(projectRoot, "package.json") : null;
+  appendLiveLog(
+    ticketId,
+    `[Lumora] Selected bot path  : ${projectRoot}\n` +
+    `[Lumora] Working directory  : ${projectRoot}\n` +
+    (pkgJsonPath ? `[Lumora] Using package.json : ${pkgJsonPath}\n` : ""),
+  );
+  logger.info(
+    { ticketId, projectRoot, pkgJsonPath, language },
+    "Bot runner: resolved project root and package.json",
+  );
+
   let install: { exitedCleanly: boolean; exitCode: number | null; output: string };
   if (language === "node") {
     appendLiveLog(ticketId, `[Lumora] Running ${pm} install…\n`);
+    // --ignore-workspace prevents pnpm from walking up to the Lumora host
+    // workspace root (pnpm-workspace.yaml) and treating the bot as a member
+    // package, which would cause it to run host scripts or fail with host-only
+    // env-var requirements (e.g. DATABASE_URL).
     const installArgs =
-      pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
+      pm === "pnpm" ? ["install", "--no-frozen-lockfile", "--ignore-workspace"] :
       pm === "yarn" ? ["install", "--non-interactive"] :
       ["install", "--no-audit", "--no-fund"];
     install = await runCommand(pm!, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
@@ -1067,7 +1090,12 @@ export async function hostUploadedZip(params: {
     if (typeof scripts["build"] === "string") {
       logger.info({ ticketId }, "Running build script before start");
       appendLiveLog(ticketId, `[Lumora] Running ${pm} run build…\n`);
-      const build = await runCommand(pm!, ["run", "build"], projectRoot, INSTALL_TIMEOUT_MS);
+      // --ignore-workspace prevents pnpm from treating the bot as part of the
+      // Lumora host workspace when running the build step.
+      const buildArgs = pm === "pnpm"
+        ? ["run", "build", "--ignore-workspace"]
+        : ["run", "build"];
+      const build = await runCommand(pm!, buildArgs, projectRoot, INSTALL_TIMEOUT_MS);
       if (!build.exitedCleanly) {
         return reportFailure(ticketId, fileName, "error", {
           message: 'The build step ("build" script in package.json) failed.',
@@ -1087,7 +1115,15 @@ export async function hostUploadedZip(params: {
     return reportFailure(ticketId, fileName, "error", { message: startCommand.error });
   }
 
-  appendLiveLog(ticketId, `[Lumora] Starting bot: ${startCommand.label}\n`);
+  appendLiveLog(
+    ticketId,
+    `[Lumora] Start command      : ${startCommand.label}\n` +
+    `[Lumora] Starting bot…\n`,
+  );
+  logger.info(
+    { ticketId, projectRoot, startCommand: startCommand.label },
+    "Bot runner: launching bot process",
+  );
 
   // Store the actual project root (may be a subdirectory of extractRoot) so restarts work.
   await updateHostedBot(ticketId, {
