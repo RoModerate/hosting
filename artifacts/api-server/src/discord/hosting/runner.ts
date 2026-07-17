@@ -278,6 +278,160 @@ async function isolateBot(sourceBotDir: string, ticketId: number): Promise<strin
   return dest;
 }
 
+/**
+ * Common environment variable names customers use to store their Discord bot
+ * token.  We check all of them so the diagnostic banner is useful even when
+ * the customer doesn't use the canonical name.
+ */
+const DISCORD_TOKEN_VAR_NAMES = [
+  "DISCORD_BOT_TOKEN",
+  "DISCORD_TOKEN",
+  "BOT_TOKEN",
+  "TOKEN",
+  "DISCORD_CLIENT_TOKEN",
+];
+
+/**
+ * Writes a pre-launch diagnostic block to the live log.
+ *
+ * Checks for the presence of Discord token secrets and logs their length (never
+ * the value), then logs "Attempting Discord login..." so the customer can see
+ * exactly where startup is in progress.  This is written to the live log before
+ * the bot process is spawned so it always appears at the top of the log output.
+ *
+ * SECURITY: the actual token value is never written anywhere.
+ */
+function appendStartupDiagnosticBanner(
+  ticketId: number,
+  userVars: Record<string, string>,
+): void {
+  const lines: string[] = ["\n[Lumora] ─── Startup diagnostics ───────────────────────\n"];
+
+  // Token presence check
+  const foundTokenVars: string[] = [];
+  for (const name of DISCORD_TOKEN_VAR_NAMES) {
+    const val = userVars[name];
+    if (val && val.trim()) {
+      foundTokenVars.push(name);
+      lines.push(`[Lumora] Token check : ${name} ✓  (length: ${val.trim().length})\n`);
+    }
+  }
+
+  if (foundTokenVars.length === 0) {
+    lines.push(
+      "[Lumora] Token check : ⚠  No Discord token found in your secrets.\n" +
+      "[Lumora]               Add DISCORD_BOT_TOKEN in the Secrets & Env Vars panel,\n" +
+      "[Lumora]               save, then restart the bot.\n",
+    );
+  }
+
+  lines.push("[Lumora] Attempting Discord login…\n");
+  lines.push("[Lumora] ────────────────────────────────────────────────\n\n");
+  appendLiveLog(ticketId, lines.join(""));
+}
+
+/**
+ * Scans a crashed bot's stdout/stderr output for known Discord error signatures
+ * and returns a pinpoint, actionable error message.
+ *
+ * Returns null when the output doesn't match any known pattern, letting the
+ * caller fall back to its generic crash message.
+ *
+ * SECURITY: output is scanned as-is but the returned message never echoes back
+ * any secret values — the patterns only match non-secret error strings.
+ */
+function diagnoseBotCrash(
+  output: string,
+  userVars: Record<string, string>,
+): string | null {
+  const text = output.toLowerCase();
+
+  // ── Invalid / wrong token ──────────────────────────────────────────────
+  if (
+    text.includes("tokeninvalid") ||
+    text.includes("token_invalid") ||
+    text.includes("an invalid token was provided") ||
+    text.includes("invalid token") ||
+    (text.includes("401") && text.includes("unauthorized"))
+  ) {
+    const hasToken = DISCORD_TOKEN_VAR_NAMES.some((n) => userVars[n]?.trim());
+    return hasToken
+      ? "Discord rejected the bot token as invalid.\n\n" +
+        "The token exists in your secrets but Discord says it is wrong. " +
+        "Double-check the value in the Secrets panel — it must be the Bot Token " +
+        "(not the Client ID or Client Secret). Regenerate it in the Discord " +
+        "Developer Portal if needed, then save and restart."
+      : "Discord rejected the bot token as invalid, and no Discord token was " +
+        "found in your secrets.\n\n" +
+        "Add your bot token as DISCORD_BOT_TOKEN in the Secrets & Env Vars panel, " +
+        "save, then restart. Never put the token directly in your source code.";
+  }
+
+  // ── Missing token — bot code called login() with nothing ──────────────
+  if (
+    text.includes("token_missing") ||
+    text.includes("error [token_missing]") ||
+    text.includes("token is required") ||
+    text.includes("no token provided") ||
+    (text.includes("login") && text.includes("token") && text.includes("undefined"))
+  ) {
+    return "Your bot called client.login() without a token.\n\n" +
+      "Make sure your code reads the token from the environment:\n" +
+      "  client.login(process.env.DISCORD_BOT_TOKEN)\n\n" +
+      "Then add DISCORD_BOT_TOKEN in the Secrets & Env Vars panel, save, and restart.\n" +
+      "Tip: add  console.log('Token exists:', !!process.env.DISCORD_BOT_TOKEN)  " +
+      "before login() to confirm the secret is being injected.";
+  }
+
+  // ── Privileged gateway intents not enabled ─────────────────────────────
+  if (
+    text.includes("disallowed intents") ||
+    text.includes("disallowedintents") ||
+    text.includes("privileged intent") ||
+    text.includes("used disallowed intent")
+  ) {
+    return "Your bot requires Privileged Gateway Intents that are not yet enabled.\n\n" +
+      "Go to: Discord Developer Portal → Your Application → Bot → " +
+      "Privileged Gateway Intents\n" +
+      "Enable whichever of these your bot needs:\n" +
+      "  • Server Members Intent (for guild member events)\n" +
+      "  • Message Content Intent (for reading message content)\n" +
+      "  • Presence Intent (for presence updates)\n\n" +
+      "Save in the portal, then restart the bot here.";
+  }
+
+  // ── Network / DNS — cannot reach Discord's API ────────────────────────
+  if (
+    text.includes("getaddrinfo enotfound discord.com") ||
+    text.includes("getaddrinfo enotfound") ||
+    text.includes("econnrefused") ||
+    (text.includes("etimedout") && text.includes("discord"))
+  ) {
+    return "The bot could not reach Discord's API.\n\n" +
+      "This is usually a temporary network issue. Wait a moment and restart the bot. " +
+      "If it keeps failing, check https://discordstatus.com for any ongoing outages.";
+  }
+
+  // ── Missing permissions / Missing Access ──────────────────────────────
+  if (text.includes("missing access") || text.includes("missing permissions")) {
+    return "The bot is missing Discord permissions.\n\n" +
+      "Make sure the bot has been invited to your server with the correct permission " +
+      "scopes, and that it has the required channel/guild permissions for the " +
+      "actions it tries to perform on startup.";
+  }
+
+  // ── No token in secrets (no output match, but we can still diagnose) ──
+  const hasAnyToken = DISCORD_TOKEN_VAR_NAMES.some((n) => userVars[n]?.trim());
+  if (!hasAnyToken) {
+    return "The bot crashed on startup and no Discord token was found in your secrets.\n\n" +
+      "Add your bot token as DISCORD_BOT_TOKEN in the Secrets & Env Vars panel, " +
+      "save, and restart. Your bot code should read it with:\n" +
+      "  client.login(process.env.DISCORD_BOT_TOKEN)";
+  }
+
+  return null; // no known pattern matched — let caller use generic message
+}
+
 function runStartupProbe(
   cmd: string,
   args: string[],
@@ -285,6 +439,10 @@ function runStartupProbe(
   ticketId: number,
   userVars: Record<string, string>,
 ): Promise<StartupProbeResult> {
+  // Write the diagnostic banner to the live log BEFORE spawning so customers
+  // can see it at the very top of the startup output.
+  appendStartupDiagnosticBanner(ticketId, userVars);
+
   return new Promise((resolve) => {
     let output = "";
     let settled = false;
@@ -1059,6 +1217,40 @@ function attachSupervision(
   });
 }
 
+/**
+ * Validates that a file is a well-formed ZIP archive by checking its PK
+ * magic bytes (0x50 0x4B) before any extraction is attempted.
+ * Returns an error string on failure, or null if the file looks valid.
+ */
+async function validateZipHeader(zipPath: string): Promise<string | null> {
+  let stat: import("node:fs").Stats;
+  try {
+    stat = await fsp.stat(zipPath);
+  } catch {
+    return "The uploaded file could not be read.";
+  }
+
+  if (stat.size === 0) {
+    return "The uploaded file is empty.";
+  }
+
+  let fd: import("node:fs/promises").FileHandle | null = null;
+  try {
+    fd = await fsp.open(zipPath, "r");
+    const buf = Buffer.alloc(4);
+    await fd.read(buf, 0, 4, 0);
+    // ZIP local-file-header magic: PK\x03\x04
+    if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
+      return "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.";
+    }
+    return null;
+  } catch {
+    return "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.";
+  } finally {
+    await fd?.close().catch(() => {});
+  }
+}
+
 export async function hostUploadedZip(params: {
   ticketId: number;
   zipPath: string;
@@ -1070,10 +1262,21 @@ export async function hostUploadedZip(params: {
   stopProcess(ticketId);
   resetAutoRestartAttempts(ticketId);
 
+  // ── ZIP validation ──────────────────────────────────────────────────────
+  // Validate the file BEFORE touching the database. If the ZIP is corrupt or
+  // not a ZIP at all we return an error without creating a deployment record.
+  const headerError = await validateZipHeader(zipPath);
+  if (headerError) {
+    logger.warn({ ticketId, fileName, headerError }, "ZIP validation failed — rejecting upload");
+    return { status: "error", message: headerError };
+  }
+
+  // ── Prepare extraction directory ────────────────────────────────────────
   const extractRoot = ticketBotDir(ticketId);
   await fsp.rm(extractRoot, { recursive: true, force: true });
   await fsp.mkdir(extractRoot, { recursive: true });
 
+  // Create (or update) the deployment record only now that the file is valid.
   await updateHostedBot(ticketId, {
     fileName,
     extractPath: extractRoot,
@@ -1084,10 +1287,11 @@ export async function hostUploadedZip(params: {
   try {
     await extract(zipPath, { dir: extractRoot });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.error({ err, ticketId, fileName }, "ZIP extraction failed");
     return reportFailure(ticketId, fileName, "error", {
-      message: "Could not extract the ZIP file.",
-      detail: message,
+      message: "ZIP file is corrupted or incomplete. Please create a new ZIP and upload again.",
+      detail,
     });
   }
 
@@ -1277,9 +1481,14 @@ export async function hostUploadedZip(params: {
   const probe = await runStartupProbe(startCommand.cmd, startCommand.args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
+    logger.warn(
+      { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
+      "Bot crashed on startup",
+    );
+    const diagnosis = diagnoseBotCrash(probe.output, userVars);
     return reportFailure(ticketId, fileName, "crashed", {
-      message: `The bot crashed on startup (exit code ${probe.exitCode ?? "unknown"}).`,
-      detail: probe.output,
+      message: diagnosis ?? `The bot crashed on startup (exit code ${probe.exitCode ?? "unknown"}).`,
+      detail: diagnosis ? probe.output : undefined,
       startCommand: startCommand.label,
     });
   }
@@ -1377,10 +1586,15 @@ export async function restartHostedBot(
   const probe = await runStartupProbe(cmd!, args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
+    logger.warn(
+      { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
+      "Bot crashed on restart",
+    );
     await updateHostedBot(ticketId, { restartCount: row.restartCount + 1 });
+    const diagnosis = diagnoseBotCrash(probe.output, userVars);
     return reportFailure(ticketId, row.fileName, "crashed", {
-      message: `The bot crashed on restart (exit code ${probe.exitCode ?? "unknown"}).`,
-      detail: probe.output,
+      message: diagnosis ?? `The bot crashed on restart (exit code ${probe.exitCode ?? "unknown"}).`,
+      detail: diagnosis ? probe.output : undefined,
     });
   }
 

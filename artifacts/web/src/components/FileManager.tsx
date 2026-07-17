@@ -709,21 +709,27 @@ export default function FileManager({ hasBot }: FileManagerProps) {
                   </div>
                   {searchResults.map((entry) => {
                     const isSelected = selectedEntry?.path === entry.path;
+                    const dir = entry.path.includes('/')
+                      ? entry.path.split('/').slice(0, -1).join('/') + '/'
+                      : '';
                     return (
                       <button
                         key={entry.path}
-                        className={`w-full flex items-center gap-1.5 px-3 py-[4px] text-left transition-colors text-xs font-mono ${isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'}`}
-                        onClick={() => {
-                          if (entry.type === 'file') { handleSelectFile(entry); clearSearch(); }
-                        }}
+                        className={`w-full flex items-start gap-1.5 px-3 py-1.5 text-left transition-colors ${isSelected ? 'bg-primary/15' : 'hover:bg-white/5'}`}
+                        onClick={() => { if (entry.type === 'file') handleSelectFile(entry); }}
                         title={entry.path}
                       >
-                        {entry.type === 'directory'
-                          ? <Folder className="h-3 w-3 text-yellow-400/60 shrink-0" />
-                          : <FileIcon className="h-3 w-3 text-muted-foreground/50 shrink-0" />}
-                        <span className="truncate">{entry.name}</span>
+                        <span className="mt-0.5 shrink-0">
+                          {entry.type === 'directory'
+                            ? <Folder className="h-3 w-3 text-yellow-400/60" />
+                            : <FileIcon className={`h-3 w-3 ${isSelected ? 'text-primary' : 'text-muted-foreground/50'}`} />}
+                        </span>
+                        <span className="flex flex-col min-w-0">
+                          <span className={`text-[11px] font-mono font-medium truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>{entry.name}</span>
+                          {dir && <span className="text-[9px] font-mono text-muted-foreground/40 truncate">{dir}</span>}
+                        </span>
                         {entry.type === 'file' && entry.size > 0 && (
-                          <span className="ml-auto text-[9px] text-muted-foreground/30 shrink-0">{humanSize(entry.size)}</span>
+                          <span className="ml-auto text-[9px] text-muted-foreground/30 shrink-0 mt-0.5">{humanSize(entry.size)}</span>
                         )}
                       </button>
                     );

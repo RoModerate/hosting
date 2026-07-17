@@ -324,19 +324,35 @@ router.post("/bots/restart", async (req, res) => {
     return;
   }
 
-  const result = await restartHostedBot(session.ticket.id, (info) => {
+  // Flip status to "starting" in the DB immediately so the portal begins
+  // polling for progress — then return right away. The actual restart (which
+  // takes several seconds for the startup probe) runs in the background.
+  await updateHostedBot(session.ticket.id, {
+    status: "starting",
+    errorMessage: null,
+    aiExplanation: null,
+  });
+  res.json({ status: "starting", message: "Bot restart initiated." });
+
+  const ticketId = session.ticket.id;
+  const crashCallback = (info: { exitCode: number | null }) => {
     notifyTicketChannel(
-      session.ticket.id,
+      ticketId,
       `The hosted bot stopped unexpectedly (exit code ${info.exitCode ?? "unknown"}). The customer can restart it from the hosting portal.`,
     ).catch(() => undefined);
+  };
+
+  setImmediate(async () => {
+    try {
+      const result = await restartHostedBot(ticketId, crashCallback);
+      notifyTicketChannel(
+        ticketId,
+        formatResultMessage(result, "Restarted via hosting portal"),
+      ).catch(() => undefined);
+    } catch (err) {
+      logger.error({ err, ticketId }, "Background restart failed");
+    }
   });
-
-  notifyTicketChannel(
-    session.ticket.id,
-    formatResultMessage(result, "Restarted via hosting portal"),
-  ).catch(() => undefined);
-
-  res.json(toHostOutcome(result));
 });
 
 export default router;
