@@ -4,9 +4,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import NotFound from '@/pages/not-found';
 import Landing from '@/pages/Landing';
-import Redeem from '@/pages/Redeem';
+import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Admin from '@/pages/Admin';
+import DiscordCallback from '@/pages/DiscordCallback';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
@@ -15,7 +16,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/login" component={Redeem} />
+      <Route path="/login" component={Login} />
+      <Route path="/auth/discord/callback" component={DiscordCallback} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />

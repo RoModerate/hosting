@@ -31,6 +31,7 @@ import {
   clearSessionCookie,
   issueSessionCookie,
   resolveSession,
+  type DiscordProfile,
 } from "../lib/session";
 import { logger } from "../lib/logger";
 
@@ -59,12 +60,14 @@ function buildSessionResponse(
   ticket: Ticket,
   key: HostingKey,
   bot: HostedBot | null,
+  discord: DiscordProfile | null,
 ) {
   return {
     ticketId: ticket.id,
     ownerUsername: ticket.ownerUsername,
     expiresAt: key.expiresAt!.toISOString(),
     hostingDurationDays: key.hostingDurationDays,
+    discord: discord ?? null,
     hostedBot: toHostedBotSummary(bot),
   };
 }
@@ -125,8 +128,6 @@ router.post("/keys/redeem", async (req, res) => {
       res.status(400).json({ error: "That access key has expired." });
       return;
     }
-    // Re-redeeming an already-active key just re-establishes the session
-    // (e.g. the customer opens the portal from a different browser).
   }
 
   const [ticket] = await db
@@ -142,7 +143,7 @@ router.post("/keys/redeem", async (req, res) => {
 
   issueSessionCookie(res, activeKey);
   const bot = await getHostedBotStatus(ticket.id);
-  res.json(buildSessionResponse(ticket, activeKey, bot));
+  res.json(buildSessionResponse(ticket, activeKey, bot, null));
 });
 
 router.get("/session/me", async (req, res) => {
@@ -154,7 +155,7 @@ router.get("/session/me", async (req, res) => {
   }
 
   const bot = await getHostedBotStatus(session.ticket.id);
-  res.json(buildSessionResponse(session.ticket, session.key, bot));
+  res.json(buildSessionResponse(session.ticket, session.key, bot, session.discord));
 });
 
 router.post(
@@ -176,7 +177,7 @@ router.post(
     const session = await resolveSession(req);
     if (!session) {
       clearSessionCookie(res);
-      res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+      res.status(401).json({ error: "Your session has expired. Please log in again." });
       return;
     }
 
@@ -186,9 +187,6 @@ router.post(
       return;
     }
 
-    // ── ZIP integrity check on the in-memory buffer (before writing to disk) ──
-    // This gives the client an immediate 400 for corrupt/truncated ZIPs instead
-    // of a 202 that later fails during background extraction.
     {
       const buf = file.buffer;
 
@@ -197,13 +195,11 @@ router.post(
         return;
       }
 
-      // Local-file-header magic: PK\x03\x04
       if (buf[0] !== 0x50 || buf[1] !== 0x4b) {
         res.status(400).json({ error: "The file you uploaded is not a ZIP archive. Please upload a .zip file." });
         return;
       }
 
-      // End-of-Central-Directory scan — catches uploads interrupted mid-transfer.
       const eocdWindow = Math.min(buf.length, 65536 + 22);
       const eocdStart  = buf.length - eocdWindow;
       let eocdFound = false;
@@ -234,7 +230,6 @@ router.post(
       const zipPath = path.join(uploadDir, file.originalname);
       await fs.writeFile(zipPath, file.buffer);
 
-      // Mark as installing in DB immediately so the dashboard sees it on the next poll
       await updateHostedBot(session.ticket.id, {
         fileName: file.originalname,
         extractPath: "",
@@ -243,10 +238,8 @@ router.post(
         aiExplanation: null,
       });
 
-      // Respond immediately — client will poll for status updates
       res.status(202).json({ status: "processing" });
 
-      // Continue processing in the background
       const ticketId = session.ticket.id;
       hostUploadedZip({
         ticketId,
@@ -283,7 +276,7 @@ router.get("/bots/env", async (req, res) => {
   const session = await resolveSession(req);
   if (!session) {
     clearSessionCookie(res);
-    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    res.status(401).json({ error: "Your session has expired. Please log in again." });
     return;
   }
 
@@ -295,7 +288,7 @@ router.post("/bots/env", async (req, res) => {
   const session = await resolveSession(req);
   if (!session) {
     clearSessionCookie(res);
-    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    res.status(401).json({ error: "Your session has expired. Please log in again." });
     return;
   }
 
@@ -334,7 +327,7 @@ router.post("/bots/stop", async (req, res) => {
   const session = await resolveSession(req);
   if (!session) {
     clearSessionCookie(res);
-    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    res.status(401).json({ error: "Your session has expired. Please log in again." });
     return;
   }
 
@@ -358,7 +351,7 @@ router.post("/bots/restart", async (req, res) => {
   const session = await resolveSession(req);
   if (!session) {
     clearSessionCookie(res);
-    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    res.status(401).json({ error: "Your session has expired. Please log in again." });
     return;
   }
 
@@ -368,9 +361,6 @@ router.post("/bots/restart", async (req, res) => {
     return;
   }
 
-  // Flip status to "starting" in the DB immediately so the portal begins
-  // polling for progress — then return right away. The actual restart (which
-  // takes several seconds for the startup probe) runs in the background.
   await updateHostedBot(session.ticket.id, {
     status: "starting",
     errorMessage: null,
@@ -414,20 +404,17 @@ router.delete("/bots", async (req, res) => {
   const session = await resolveSession(req);
   if (!session) {
     clearSessionCookie(res);
-    res.status(401).json({ error: "Your session has expired. Please redeem your access key again." });
+    res.status(401).json({ error: "Your session has expired. Please log in again." });
     return;
   }
 
   const ticketId = session.ticket.id;
 
-  // Stop the running process (ignore errors — may already be stopped)
   await stopHostedBot(ticketId).catch(() => undefined);
 
-  // Delete uploaded files
   const uploadDir = ticketUploadDir(ticketId);
   await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => undefined);
 
-  // Reset the bot record so the portal shows "no bot deployed"
   await updateHostedBot(ticketId, {
     fileName: "",
     extractPath: "",
@@ -442,4 +429,3 @@ router.delete("/bots", async (req, res) => {
 });
 
 export default router;
-

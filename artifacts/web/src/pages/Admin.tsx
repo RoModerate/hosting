@@ -8,21 +8,17 @@ import {
   getGetAdminStatusQueryKey,
   useUpdateAdminConfig,
 } from '@workspace/api-client-react';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Lock, ShieldAlert, Bot, Settings2, CheckCircle2, XCircle, Save } from 'lucide-react';
+import {
+  Lock, ShieldAlert, Bot, Settings2, CheckCircle2, XCircle,
+  Save, Key, Plus, Copy, RefreshCw, Loader2, Eye, EyeOff,
+  MessageSquare, ChevronRight, ArrowLeft, Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
 const configSchema = z.object({
   adminPassword: z.string().min(1, 'Admin password is required'),
@@ -34,14 +30,165 @@ const configSchema = z.object({
   openrouterModel: z.string().optional(),
 });
 
+const genKeySchema = z.object({
+  duration: z.number().min(1).max(365),
+  label: z.string().optional(),
+});
+
 type ConfigFormValues = z.infer<typeof configSchema>;
+type GenKeyFormValues = z.infer<typeof genKeySchema>;
+
+interface GeneratedKey {
+  key: string;
+  durationDays: number;
+  createdAt: string;
+}
+
+function StatusDot({ ok }: { ok: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-mono ${ok ? 'text-emerald-400' : 'text-white/25'}`}>
+      {ok
+        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+        : <XCircle className="h-3.5 w-3.5 text-white/20" />}
+      {ok ? 'Set' : 'Not set'}
+    </span>
+  );
+}
+
+// Key Generator Panel
+function KeyGenerator({ adminPassword }: { adminPassword: string }) {
+  const [generating, setGenerating] = useState(false);
+  const [generatedKeys, setGeneratedKeys] = useState<GeneratedKey[]>([]);
+  const [duration, setDuration] = useState(30);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const r = await fetch(`${BASE}/api/admin/keys/generate`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPassword,
+        },
+        body: JSON.stringify({ hostingDurationDays: duration }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as any;
+        throw new Error(d?.error || 'Failed to generate key');
+      }
+      const data = await r.json() as any;
+      const newKey: GeneratedKey = {
+        key: data.key,
+        durationDays: duration,
+        createdAt: new Date().toISOString(),
+      };
+      setGeneratedKeys(prev => [newKey, ...prev]);
+      toast.success('Key generated successfully');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to generate key');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = (key: string) => {
+    navigator.clipboard.writeText(key);
+    setCopiedKey(key);
+    toast.success('Key copied to clipboard');
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.05]">
+        <div className="h-8 w-8 rounded-xl bg-[#6366f1]/10 border border-[#6366f1]/20 flex items-center justify-center">
+          <Key className="h-4 w-4 text-[#6366f1]/70" />
+        </div>
+        <div>
+          <h3 className="font-mono text-sm text-white/80 font-semibold">Generate Access Key</h3>
+          <p className="text-[11px] text-white/30 mt-0.5">Create hosting keys for new users</p>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <div className="space-y-2">
+          <label className="text-[11px] font-mono text-white/35 tracking-wider">DURATION (DAYS)</label>
+          <div className="flex gap-2 flex-wrap">
+            {[7, 14, 30, 60, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => setDuration(d)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all duration-200 ${
+                  duration === d
+                    ? 'border-[#6366f1]/40 bg-[#6366f1]/10 text-[#6366f1]/80'
+                    : 'border-white/[0.07] text-white/35 hover:border-white/[0.14] hover:text-white/60'
+                }`}
+              >
+                {d}d
+              </button>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                value={duration}
+                onChange={(e) => setDuration(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
+                className="w-16 bg-white/[0.03] border border-white/[0.07] rounded-lg px-2.5 py-1.5 font-mono text-xs text-white/65 text-center focus:outline-none focus:border-[#6366f1]/30 transition-colors"
+                min={1}
+                max={365}
+              />
+              <span className="text-xs font-mono text-white/25">days</span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-semibold bg-[#6366f1] hover:bg-[#7577f3] text-white transition-all duration-200 shadow-lg shadow-[#6366f1]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {generating ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+          ) : (
+            <><Plus className="h-4 w-4" /> Generate Key</>
+          )}
+        </button>
+
+        {generatedKeys.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-[10px] font-mono text-white/25 tracking-wider">GENERATED KEYS</p>
+            {generatedKeys.map((gk) => (
+              <div key={gk.key} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <code className="flex-1 font-mono text-xs text-white/70 tracking-wider truncate">{gk.key}</code>
+                <span className="text-[10px] font-mono text-white/25 shrink-0">{gk.durationDays}d</span>
+                <button
+                  onClick={() => handleCopy(gk.key)}
+                  className={`shrink-0 p-1.5 rounded-lg transition-all duration-200 ${
+                    copiedKey === gk.key
+                      ? 'text-emerald-400 bg-emerald-500/10'
+                      : 'text-white/25 hover:text-white/60 hover:bg-white/[0.05]'
+                  }`}
+                >
+                  {copiedKey === gk.key ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Admin() {
   const queryClient = useQueryClient();
   const [adminPassword, setAdminPassword] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<'config' | 'keys'>('config');
 
-  const { data: statusData, isError, error, refetch, isFetching } = useGetAdminStatus({
+  const { data: statusData, isError, error, isFetching } = useGetAdminStatus({
     query: {
       enabled: !!adminPassword,
       queryKey: getGetAdminStatusQueryKey(),
@@ -53,9 +200,7 @@ export default function Admin() {
   });
 
   const updateConfig = useUpdateAdminConfig({
-    request: {
-      headers: { 'x-admin-password': adminPassword },
-    }
+    request: { headers: { 'x-admin-password': adminPassword } }
   });
 
   const form = useForm<ConfigFormValues>({
@@ -71,7 +216,6 @@ export default function Admin() {
     },
   });
 
-  // Keep form's password synced with the state we use for the query header
   useEffect(() => {
     form.setValue('adminPassword', adminPassword);
   }, [adminPassword, form]);
@@ -80,31 +224,22 @@ export default function Admin() {
     e.preventDefault();
     if (!passwordInput) return;
     setAdminPassword(passwordInput);
-    // The query will automatically run since adminPassword is now set
   };
 
   const onSubmit = (data: ConfigFormValues) => {
-    // Only send fields that are actually provided to avoid overwriting with empty
     const payload = Object.fromEntries(
       Object.entries(data).filter(([_, v]) => v !== '' && v !== undefined && v !== null)
     ) as ConfigFormValues;
-
-    // Ensure we always send the password
     payload.adminPassword = adminPassword;
 
-    const loadingToast = toast.loading('Saving configuration & reconnecting bot...');
-
+    const loadingToast = toast.loading('Saving configuration…');
     updateConfig.mutate(
       { data: payload },
       {
         onSuccess: (newStatus) => {
-          toast.success('Configuration saved successfully', { id: loadingToast });
+          toast.success('Configuration saved', { id: loadingToast });
           queryClient.setQueryData(getGetAdminStatusQueryKey(), newStatus);
-          form.reset({
-            ...form.getValues(),
-            discordBotToken: '',
-            openrouterApiKey: '',
-          }); // Clear secrets
+          form.reset({ ...form.getValues(), discordBotToken: '', openrouterApiKey: '' });
         },
         onError: (err: any) => {
           toast.error(`Save failed: ${err?.error || 'Unknown error'}`, { id: loadingToast });
@@ -116,201 +251,275 @@ export default function Admin() {
   // Login view
   if (!adminPassword || (isError && (error as any)?.status === 401)) {
     return (
-      <div className="min-h-[100dvh] w-full flex items-center justify-center p-4 bg-background">
-        <Card className="w-full max-w-sm border-primary/20 shadow-2xl shadow-primary/5">
-          <CardHeader className="text-center pb-8">
-            <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
-              <ShieldAlert className="w-6 h-6 text-destructive" />
+      <div className="min-h-[100dvh] w-full flex items-center justify-center p-4 bg-[#080810] animate-page-in">
+        <div className="relative w-full max-w-sm">
+          {/* Background glow */}
+          <div className="absolute inset-0 -z-10 rounded-3xl opacity-30"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.15) 0%, transparent 70%)' }} />
+
+          <div className="text-center mb-8 space-y-3">
+            <div className="flex justify-center mb-5">
+              <div className="h-14 w-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center"
+                style={{ boxShadow: '0 0 30px rgba(239,68,68,0.1)' }}>
+                <ShieldAlert className="h-7 w-7 text-red-400/70" />
+              </div>
             </div>
-            <CardTitle className="font-mono text-2xl">RESTRICTED ACCESS</CardTitle>
-            <CardDescription className="font-mono text-xs mt-2">
-              LUMORA CORE CONFIGURATION
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+            <h1 className="text-2xl font-mono font-bold tracking-[0.12em] text-white">ADMIN ACCESS</h1>
+            <p className="text-xs font-mono tracking-[0.2em] text-white/30">LUMORA OPERATIONS CONSOLE</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-xl p-6"
+            style={{ boxShadow: '0 0 60px rgba(0,0,0,0.5)' }}>
+            <form onSubmit={handleLogin} className="space-y-3">
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type="password"
-                  placeholder="ADMIN PASSWORD"
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Admin password"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  className="pl-10 font-mono tracking-widest h-12 bg-background"
+                  className="w-full pl-10 pr-10 h-12 rounded-xl border border-white/[0.08] bg-white/[0.03] font-mono text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-red-500/30 transition-all duration-200"
                   data-testid="input-admin-password"
+                  autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
+
               {isError && (error as any)?.status === 401 && adminPassword && (
-                <p className="text-xs text-destructive font-mono text-center">ACCESS DENIED</p>
+                <div className="text-xs font-mono text-red-400/70 text-center py-1">
+                  Access denied — incorrect password
+                </div>
               )}
-              <Button type="submit" className="w-full h-12 font-mono font-bold tracking-wider" disabled={isFetching} data-testid="button-admin-login">
-                {isFetching ? 'VERIFYING...' : 'AUTHORIZE'}
-              </Button>
+
+              <button
+                type="submit"
+                className="w-full h-12 rounded-xl font-mono font-bold tracking-[0.15em] text-sm bg-red-500/80 hover:bg-red-500 text-white transition-all duration-200 shadow-lg shadow-red-500/15 disabled:opacity-50"
+                disabled={isFetching || !passwordInput}
+                data-testid="button-admin-login"
+              >
+                {isFetching ? (
+                  <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> VERIFYING…</span>
+                ) : 'AUTHORIZE'}
+              </button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Dashboard view
   if (!statusData) return null;
 
   return (
-    <div className="min-h-[100dvh] w-full p-4 md:p-8 bg-background">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6">
+    <div className="min-h-[100dvh] w-full bg-[#080810] text-[#c8cde8] animate-page-in">
+      <div className="max-w-5xl mx-auto px-5 py-8 space-y-6">
+
+        {/* Header */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/[0.05]">
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 bg-destructive/10 rounded-xl border border-destructive/20 flex items-center justify-center">
-              <Settings2 className="h-6 w-6 text-destructive" />
+            <div className="h-11 w-11 rounded-2xl bg-red-500/[0.08] border border-red-500/15 flex items-center justify-center">
+              <Settings2 className="h-5.5 w-5.5 text-red-400/60" />
             </div>
             <div>
-              <h1 className="text-2xl font-mono font-bold tracking-tight text-destructive">OPS CONSOLE</h1>
-              <p className="text-sm font-mono text-muted-foreground">
-                SYSTEM CONFIGURATION & DIAGNOSTICS
-              </p>
+              <h1 className="text-xl font-mono font-bold tracking-tight text-white">Operations Console</h1>
+              <p className="text-[11px] font-mono text-white/30 mt-0.5">Lumora System Configuration</p>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className={`font-mono px-3 py-1 ${statusData.botConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-destructive/10 text-destructive border-destructive/20'}`}>
-              <Bot className="w-4 h-4 mr-2" />
-              {statusData.botConnected ? (statusData.botTag || 'CONNECTED') : 'DISCONNECTED'}
-            </Badge>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono ${
+              statusData.botConnected
+                ? 'bg-emerald-500/[0.08] text-emerald-400 border-emerald-500/15'
+                : 'bg-red-500/[0.08] text-red-400/70 border-red-500/15'
+            }`}>
+              <Bot className="h-3.5 w-3.5" />
+              {statusData.botConnected ? (statusData.botTag || 'Bot Connected') : 'Bot Offline'}
+            </div>
+            <button
+              onClick={() => setAdminPassword('')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.07] text-xs font-mono text-white/35 hover:text-white/65 hover:border-white/[0.14] transition-all duration-200"
+            >
+              <Lock className="h-3 w-3" />
+              Lock
+            </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2">
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="font-mono text-lg text-primary">CORE VARIABLES</CardTitle>
-                <CardDescription className="font-mono text-xs">Only populate fields you wish to update.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="discordBotToken"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="font-mono text-xs text-muted-foreground">DISCORD_BOT_TOKEN</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="••••••••••••••••••••••••••••••••" {...field} className="font-mono bg-background" data-testid="input-discord-token" />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="discordGuildId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="font-mono text-xs text-muted-foreground">GUILD_ID</FormLabel>
-                              <FormControl>
-                                <Input placeholder="123456789012345678" {...field} className="font-mono bg-background" data-testid="input-guild-id" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="discordStaffRoleId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="font-mono text-xs text-muted-foreground">STAFF_ROLE_ID</FormLabel>
-                              <FormControl>
-                                <Input placeholder="123456789012345678" {...field} className="font-mono bg-background" data-testid="input-staff-role-id" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <FormField
-                        control={form.control}
-                        name="discordTicketCategoryName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="font-mono text-xs text-muted-foreground">TICKET_CATEGORY_NAME</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Tickets" {...field} className="font-mono bg-background" />
-                            </FormControl>
-                            <FormDescription className="text-xs">Category where bot will listen for keys</FormDescription>
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <div className="border-t border-border/50 pt-4 mt-4">
-                        <h4 className="font-mono text-xs text-muted-foreground mb-4">AI DIAGNOSTICS (OPTIONAL)</h4>
-                        <FormField
-                          control={form.control}
-                          name="openrouterApiKey"
-                          render={({ field }) => (
-                            <FormItem className="mb-4">
-                              <FormLabel className="font-mono text-xs text-muted-foreground">OPENROUTER_API_KEY</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="sk-or-v1-..." {...field} className="font-mono bg-background" data-testid="input-openrouter-key" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="openrouterModel"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="font-mono text-xs text-muted-foreground">OPENROUTER_MODEL</FormLabel>
-                              <FormControl>
-                                <Input placeholder="anthropic/claude-3.5-sonnet" {...field} className="font-mono bg-background" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-
-                    <Button 
-                      type="submit" 
-                      className="w-full font-mono mt-8" 
-                      disabled={updateConfig.isPending}
-                      data-testid="button-save-config"
-                    >
-                      {updateConfig.isPending ? (
-                        <>APPLYING CHANGES...</>
-                      ) : (
-                        <><Save className="w-4 h-4 mr-2" /> DEPLOY CONFIGURATION</>
-                      )}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="md:col-span-1 space-y-6">
-            <Card className="bg-muted/20 border-border/50">
-              <CardHeader>
-                <CardTitle className="font-mono text-sm">ENVIRONMENT STATUS</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3 font-mono text-xs">
-                  {statusData.configKeys.map((item) => (
-                    <li key={item.key} className="flex items-center justify-between">
-                      <span className="text-muted-foreground">{item.key}</span>
-                      {item.isSet ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-destructive opacity-50" />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Tab nav */}
+        <div className="flex gap-1 border-b border-white/[0.05]">
+          {[
+            { id: 'config', icon: Settings2, label: 'Configuration' },
+            { id: 'keys', icon: Key, label: 'Access Keys' },
+          ].map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono border-b-2 transition-all duration-200 ${
+                activeTab === id
+                  ? 'border-[#6366f1] text-white/75'
+                  : 'border-transparent text-white/30 hover:text-white/55'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* Config Tab */}
+        {activeTab === 'config' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/[0.05]">
+                  <h2 className="font-mono text-sm text-white/70 font-semibold">Core Variables</h2>
+                  <p className="text-[11px] font-mono text-white/30 mt-0.5">Only fill fields you wish to update.</p>
+                </div>
+                <div className="p-5">
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                      {/* Discord section */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 pb-1">
+                          <MessageSquare className="h-3.5 w-3.5 text-[#5865F2]/60" />
+                          <span className="text-[11px] font-mono text-white/35 tracking-wider">DISCORD</span>
+                        </div>
+                        <FormField control={form.control} name="discordBotToken"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-mono text-[11px] text-white/35">BOT TOKEN</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="MTxxxxxxxxxx.Gxxxxx.xxxxx" {...field}
+                                  className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl"
+                                  data-testid="input-discord-token" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <FormField control={form.control} name="discordGuildId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="font-mono text-[11px] text-white/35">GUILD ID</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="123456789012345678" {...field}
+                                    className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl"
+                                    data-testid="input-guild-id" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField control={form.control} name="discordStaffRoleId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="font-mono text-[11px] text-white/35">STAFF ROLE ID</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="123456789012345678" {...field}
+                                    className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl"
+                                    data-testid="input-staff-role-id" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <FormField control={form.control} name="discordTicketCategoryName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-mono text-[11px] text-white/35">TICKET CATEGORY</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Tickets" {...field}
+                                  className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl" />
+                              </FormControl>
+                              <FormDescription className="text-[11px] font-mono text-white/25">Category where the bot listens for keys</FormDescription>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* AI section */}
+                      <div className="space-y-3 pt-2 border-t border-white/[0.05]">
+                        <div className="flex items-center gap-2 pb-1 pt-1">
+                          <Zap className="h-3.5 w-3.5 text-[#6366f1]/60" />
+                          <span className="text-[11px] font-mono text-white/35 tracking-wider">AI DIAGNOSTICS (OPTIONAL)</span>
+                        </div>
+                        <FormField control={form.control} name="openrouterApiKey"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-mono text-[11px] text-white/35">OPENROUTER API KEY</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="sk-or-v1-..." {...field}
+                                  className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl"
+                                  data-testid="input-openrouter-key" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField control={form.control} name="openrouterModel"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-mono text-[11px] text-white/35">MODEL</FormLabel>
+                              <FormControl>
+                                <Input placeholder="anthropic/claude-3.5-sonnet" {...field}
+                                  className="font-mono bg-white/[0.03] border-white/[0.07] focus:border-[#6366f1]/30 text-white/70 placeholder:text-white/15 rounded-xl" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full font-mono rounded-xl bg-[#6366f1] hover:bg-[#7577f3] shadow-lg shadow-[#6366f1]/20"
+                        disabled={updateConfig.isPending}
+                        data-testid="button-save-config"
+                      >
+                        {updateConfig.isPending ? (
+                          <><Loader2 className="h-4 w-4 animate-spin mr-2" />Applying Changes…</>
+                        ) : (
+                          <><Save className="h-4 w-4 mr-2" />Save Configuration</>
+                        )}
+                      </Button>
+                    </form>
+                  </Form>
+                </div>
+              </div>
+            </div>
+
+            {/* Status sidebar */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
+                <div className="px-4 py-3.5 border-b border-white/[0.05]">
+                  <h3 className="font-mono text-xs text-white/50 font-semibold tracking-wider">ENVIRONMENT STATUS</h3>
+                </div>
+                <div className="p-4">
+                  <ul className="space-y-2.5">
+                    {statusData.configKeys.map((item) => (
+                      <li key={item.key} className="flex items-center justify-between">
+                        <span className="font-mono text-[11px] text-white/40">{item.key}</span>
+                        <StatusDot ok={item.isSet} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <KeyGenerator adminPassword={adminPassword} />
+            </div>
+          </div>
+        )}
+
+        {/* Keys Tab */}
+        {activeTab === 'keys' && (
+          <div className="max-w-lg">
+            <KeyGenerator adminPassword={adminPassword} />
+          </div>
+        )}
       </div>
     </div>
   );

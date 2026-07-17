@@ -10,17 +10,39 @@ import {
 
 const SESSION_COOKIE = "hosting_session";
 
+export interface DiscordProfile {
+  id: string;
+  username: string;
+  globalName: string | null;
+  avatar: string | null;
+}
+
 interface SessionPayload {
   keyId: number;
+  discord?: DiscordProfile;
 }
 
 export interface ResolvedSession {
   key: HostingKey;
   ticket: Ticket;
+  discord: DiscordProfile | null;
 }
 
 export function issueSessionCookie(res: Response, key: HostingKey): void {
   const payload: SessionPayload = { keyId: key.id };
+  _setCookie(res, key, payload);
+}
+
+export function issueSessionCookieWithDiscord(
+  res: Response,
+  key: HostingKey,
+  discord: DiscordProfile,
+): void {
+  const payload: SessionPayload = { keyId: key.id, discord };
+  _setCookie(res, key, payload);
+}
+
+function _setCookie(res: Response, key: HostingKey, payload: SessionPayload): void {
   const maxAge = key.expiresAt
     ? Math.max(key.expiresAt.getTime() - Date.now(), 0)
     : undefined;
@@ -83,5 +105,5 @@ export async function resolveSession(
     .where(eq(ticketsTable.id, key.ticketId));
   if (!ticket) return null;
 
-  return { key, ticket };
+  return { key, ticket, discord: payload.discord ?? null };
 }
