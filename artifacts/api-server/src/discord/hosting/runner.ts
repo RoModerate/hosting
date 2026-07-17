@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import extract from "extract-zip";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, hostedBotsTable, ticketsTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { ticketBotDir, ticketUploadDir } from "./paths";
@@ -14,6 +14,7 @@ import {
   consumeIntentionalStop,
   getAutoRestartAttempts,
   getLiveLog,
+  isRunning,
   resetAutoRestartAttempts,
   setRunningProcess,
   stopProcess,
@@ -45,7 +46,14 @@ function isolatedBotDir(ticketId: number): string {
   return path.join(ISOLATED_BOTS_DIR, String(ticketId));
 }
 
-export type HostStatus = "running" | "crashed" | "error";
+export type HostStatus =
+  | "running"      // legacy — displayed as ONLINE
+  | "online"       // discord client.ready confirmed
+  | "connecting"   // process alive, awaiting Discord gateway
+  | "login_failed" // process alive but Discord login failed
+  | "crashed"
+  | "error"
+  | "stopped";
 export type BotLanguage = "node" | "python";
 
 export interface HostResult {
@@ -123,11 +131,43 @@ function runCommand(
   });
 }
 
+// ─── Discord gateway signal detection ────────────────────────────────────────
+// Scanned line-by-line in runStartupProbe output to determine whether
+// client.ready fired, login failed, or we're still waiting.
+
+/** Patterns that indicate the Discord client.ready event fired successfully. */
+const DISCORD_ONLINE_PATTERNS: RegExp[] = [
+  /logged in as .+/i,           // discord.js default: "Logged in as Bot#1234"
+  /ready\s*[!.]?\s*$/im,        // "Ready!", "Ready." at end of line
+  /bot (is )?online/i,          // common user code: "Bot is online"
+  /(client|bot) (is )?ready/i,  // "Client ready", "Bot ready"
+  /successfully logged in/i,
+  /connected to discord/i,
+  /discord.*client.*ready/i,
+  /gateway.*connect/i,
+];
+
+/** Patterns that indicate Discord login failed (process may still be running). */
+const DISCORD_FAIL_PATTERNS: RegExp[] = [
+  /an invalid token was provided/i,
+  /token[\s_-]*invalid/i,
+  /invalid[\s_-]*token/i,
+  /disallowed[\s_-]*intents/i,
+  /used disallowed intents/i,
+  /privileged intent/i,
+  /TokenInvalid/,
+  /ENOTFOUND discord\.com/i,
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface StartupProbeResult {
   child: ChildProcess;
   crashed: boolean;
   exitCode: number | null;
   output: string;
+  /** Discord gateway signal detected during the probe window, or null if none yet. */
+  discordSignal: "online" | "login_failed" | null;
 }
 
 /** Unique port for each hosted bot so none of them fight over 8080. */
@@ -448,38 +488,64 @@ function runStartupProbe(
   // Write the diagnostic banner to the live log BEFORE spawning so customers
   // can see it at the very top of the startup output.
   appendStartupDiagnosticBanner(ticketId, userVars);
+  appendLiveLog(ticketId, "[Discord] Connecting...\n");
 
   return new Promise((resolve) => {
     let output = "";
     let settled = false;
+    let discordSignal: StartupProbeResult["discordSignal"] = null;
+
     const child = spawn(cmd, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: botEnv(ticketId, userVars),
     });
 
+    /** Scan each output chunk for Discord gateway signals. */
+    const checkSignal = (text: string) => {
+      if (discordSignal) return; // already found one — don't overwrite
+      if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(text))) {
+        discordSignal = "online";
+        // Try to extract the username discord.js logs ("Logged in as Bot#1234").
+        const match = text.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
+        const who = match?.[1]?.trim();
+        appendLiveLog(
+          ticketId,
+          `[Discord] Login successful${who ? ` — bot online as ${who}` : ""}.\n`,
+        );
+      } else if (DISCORD_FAIL_PATTERNS.some((p) => p.test(text))) {
+        discordSignal = "login_failed";
+        appendLiveLog(
+          ticketId,
+          "[Discord] Login failed — check your bot token and gateway intents.\n",
+        );
+      }
+    };
+
     child.stdout?.on("data", (d: Buffer) => {
       const text = d.toString();
       output = tail(output + text, OUTPUT_TAIL_CHARS);
       appendLiveLog(ticketId, text);
+      checkSignal(text);
     });
     child.stderr?.on("data", (d: Buffer) => {
       const text = d.toString();
       output = tail(output + text, OUTPUT_TAIL_CHARS);
       appendLiveLog(ticketId, text);
+      checkSignal(text);
     });
 
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      resolve({ child, crashed: false, exitCode: null, output });
+      resolve({ child, crashed: false, exitCode: null, output, discordSignal });
     }, STARTUP_PROBE_MS);
 
     child.once("exit", (code) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ child, crashed: true, exitCode: code, output });
+      resolve({ child, crashed: true, exitCode: code, output, discordSignal });
     });
 
     child.once("error", (err) => {
@@ -487,7 +553,7 @@ function runStartupProbe(
       settled = true;
       clearTimeout(timer);
       output = tail(output + `\n${err.message}`, OUTPUT_TAIL_CHARS);
-      resolve({ child, crashed: true, exitCode: null, output });
+      resolve({ child, crashed: true, exitCode: null, output, discordSignal });
     });
   });
 }
@@ -1282,16 +1348,31 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
     );
 
     if (!probe.crashed) {
-      appendLiveLog(ticketId, `[Lumora] ✓ Bot is running after auto-repair.\n`);
+      const repairStatus: HostStatus =
+        probe.discordSignal === "online" ? "online" :
+        probe.discordSignal === "login_failed" ? "login_failed" :
+        "connecting";
+
+      appendLiveLog(
+        ticketId,
+        repairStatus === "online"
+          ? "[Lumora] ✓ Bot is online and connected to Discord after auto-repair.\n"
+          : "[Lumora] ✓ Bot process is running after auto-repair — waiting for Discord connection.\n",
+      );
       attachSupervision(ticketId, probe.child, onCrash);
       await updateHostedBot(ticketId, {
-        status: "running",
-        errorMessage: null,
+        status: repairStatus,
+        errorMessage: repairStatus === "login_failed"
+          ? "Process running but Discord connection failed. Check your bot token and gateway intents."
+          : null,
         aiExplanation: null,
         lastStartedAt: new Date(),
         startCommand: resolvedStart.label,
         recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
       });
+      if (repairStatus === "connecting") {
+        watchForDiscordReady(ticketId);
+      }
       return { fixed: true, friendlyMessage: repair.friendlyMessage, lastOutput: probe.output };
     }
 
@@ -1308,6 +1389,68 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
     friendlyMessage: `Lumora tried ${MAX_REPAIR_ATTEMPTS} automatic repair${MAX_REPAIR_ATTEMPTS !== 1 ? "s" : ""} but the bot is still crashing. Please review the log output and check your configuration.`,
     lastOutput: crashOutput,
   };
+}
+
+/**
+ * After attaching supervision, poll the live log for Discord gateway signals
+ * for up to `timeoutMs` ms. Upgrades the DB status from "connecting" to
+ * "online" or "login_failed" as signals are detected.
+ *
+ * Fire-and-forget — never throws.
+ */
+function watchForDiscordReady(ticketId: number, timeoutMs = 45_000): void {
+  const startedAt = Date.now();
+  let scannedUpTo = 0; // track how much of the live log we've already checked
+
+  function poll(): void {
+    try {
+      const log = getLiveLog(ticketId);
+      const chunk = log.slice(scannedUpTo);
+      scannedUpTo = log.length;
+
+      if (chunk) {
+        if (DISCORD_ONLINE_PATTERNS.some((p) => p.test(chunk))) {
+          const match = chunk.match(/logged in as (.+?)(?:\s*[\n\r]|$)/i);
+          const who = match?.[1]?.trim();
+          if (who) {
+            appendLiveLog(ticketId, `[Discord] Bot online as ${who}\n`);
+          }
+          logger.info({ ticketId, who }, "Discord client.ready detected via live log watcher");
+          db.update(hostedBotsTable)
+            .set({ status: "online" })
+            .where(eq(hostedBotsTable.ticketId, ticketId))
+            .catch((err: unknown) => logger.error({ err }, "Failed to set discord online status"));
+          return; // done
+        }
+
+        if (DISCORD_FAIL_PATTERNS.some((p) => p.test(chunk))) {
+          logger.warn({ ticketId }, "Discord login failure detected via live log watcher");
+          db.update(hostedBotsTable)
+            .set({
+              status: "login_failed",
+              errorMessage:
+                "Process running but Discord connection failed. " +
+                "Check your bot token and gateway intents.",
+            })
+            .where(eq(hostedBotsTable.ticketId, ticketId))
+            .catch((err: unknown) => logger.error({ err }, "Failed to set login_failed status"));
+          return; // done
+        }
+      }
+
+      if (!isRunning(ticketId)) return; // process died — crash handler takes over
+      if (Date.now() - startedAt >= timeoutMs) {
+        logger.info({ ticketId }, "Discord ready watcher timed out — status stays 'connecting'");
+        return;
+      }
+
+      setTimeout(poll, 500);
+    } catch (err) {
+      logger.warn({ err, ticketId }, "watchForDiscordReady poll threw unexpectedly");
+    }
+  }
+
+  setTimeout(poll, 400); // first check shortly after supervision is attached
 }
 
 function attachSupervision(
@@ -1765,18 +1908,35 @@ export async function hostUploadedZip(params: {
     });
   }
 
+  // Determine initial Discord status from signals seen during the probe window.
+  const initialStatus: HostStatus =
+    probe.discordSignal === "online" ? "online" :
+    probe.discordSignal === "login_failed" ? "login_failed" :
+    "connecting";
+
   attachSupervision(ticketId, probe.child, onCrash);
   await updateHostedBot(ticketId, {
-    status: "running",
-    errorMessage: null,
+    status: initialStatus,
+    errorMessage: initialStatus === "login_failed"
+      ? "Process running but Discord connection failed. Check your bot token and gateway intents."
+      : null,
     aiExplanation: null,
     lastStartedAt: new Date(),
     recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
+  if (initialStatus === "connecting") {
+    watchForDiscordReady(ticketId);
+  }
+
   return {
-    status: "running",
-    message: "The bot installed cleanly and is now running.",
+    status: initialStatus,
+    message:
+      initialStatus === "online"
+        ? "The bot is running and connected to Discord."
+        : initialStatus === "login_failed"
+        ? "The bot process started, but Discord connection failed. Check your token and intents."
+        : "The bot process started and is connecting to Discord.",
     startCommand: startCommand.label,
   };
 }
@@ -1870,17 +2030,36 @@ export async function restartHostedBot(
     });
   }
 
+  const restartStatus: HostStatus =
+    probe.discordSignal === "online" ? "online" :
+    probe.discordSignal === "login_failed" ? "login_failed" :
+    "connecting";
+
   attachSupervision(ticketId, probe.child, onCrash);
   await updateHostedBot(ticketId, {
-    status: "running",
-    errorMessage: null,
+    status: restartStatus,
+    errorMessage: restartStatus === "login_failed"
+      ? "Process running but Discord connection failed. Check your bot token and gateway intents."
+      : null,
     aiExplanation: null,
     lastStartedAt: new Date(),
     restartCount: row.restartCount + 1,
     recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
   });
 
-  return { status: "running", message: "The bot was restarted and is now running." };
+  if (restartStatus === "connecting") {
+    watchForDiscordReady(ticketId);
+  }
+
+  return {
+    status: restartStatus,
+    message:
+      restartStatus === "online"
+        ? "The bot was restarted and connected to Discord."
+        : restartStatus === "login_failed"
+        ? "The bot process restarted, but Discord connection failed."
+        : "The bot process restarted and is connecting to Discord.",
+  };
 }
 
 export async function getHostedBotStatus(ticketId: number) {
@@ -1921,10 +2100,14 @@ export async function stopHostedBot(ticketId: number): Promise<HostResult> {
 export async function resumeHostedBotsOnBoot(
   notify: (ticketId: number, result: HostResult) => void,
 ): Promise<void> {
+  // Resume any bot that was live at the time the server was restarted,
+  // regardless of which phase of the Discord connection lifecycle it was in.
   const rows = await db
     .select()
     .from(hostedBotsTable)
-    .where(eq(hostedBotsTable.status, "running"));
+    .where(
+      inArray(hostedBotsTable.status, ["running", "online", "connecting", "login_failed"]),
+    );
 
   for (const row of rows) {
     const [ticket] = await db

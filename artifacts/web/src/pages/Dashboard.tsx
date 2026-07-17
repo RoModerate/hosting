@@ -50,11 +50,30 @@ type UploadOutcome = {
 type EnvEntry = { key: string; value: string; hidden: boolean };
 
 const STATUS_META: Record<string, { label: string; color: string; glow: string; icon: React.ReactNode }> = {
-  running: {
-    label: 'RUNNING',
+  online: {
+    label: 'ONLINE',
     color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
     glow: '0 0 12px rgba(52,211,153,0.4)',
     icon: <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" /></span>,
+  },
+  running: {
+    // legacy alias — old records stored "running"; display as ONLINE
+    label: 'ONLINE',
+    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    glow: '0 0 12px rgba(52,211,153,0.4)',
+    icon: <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" /></span>,
+  },
+  connecting: {
+    label: 'CONNECTING',
+    color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+    glow: '0 0 12px rgba(234,179,8,0.3)',
+    icon: <Loader2 className="h-3 w-3 text-yellow-400 animate-spin" />,
+  },
+  login_failed: {
+    label: 'LOGIN FAILED',
+    color: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+    glow: '0 0 12px rgba(249,115,22,0.3)',
+    icon: <AlertTriangle className="h-3 w-3 text-orange-400" />,
   },
   crashed: {
     label: 'CRASHED',
@@ -81,7 +100,7 @@ const STATUS_META: Record<string, { label: string; color: string; glow: string; 
     icon: <Loader2 className="h-3 w-3 text-blue-400 animate-spin" />,
   },
   stopped: {
-    label: 'STOPPED',
+    label: 'OFFLINE',
     color: 'text-muted-foreground border-border bg-muted/30',
     glow: 'none',
     icon: <span className="h-2 w-2 rounded-full bg-muted-foreground" />,
@@ -119,7 +138,13 @@ export default function Dashboard() {
       retry: false,
       refetchInterval: (query) => {
         const s = (query.state.data as any)?.hostedBot?.status;
-        if (isUploadingRef.current || s === 'installing' || s === 'starting') return 2000;
+        // Poll while any transient / in-progress state is active.
+        if (
+          isUploadingRef.current ||
+          s === 'installing' ||
+          s === 'starting' ||
+          s === 'connecting'   // waiting for Discord gateway signal
+        ) return 2000;
         return false;
       },
     },
@@ -147,13 +172,18 @@ export default function Dashboard() {
   useEffect(() => {
     const status = session?.hostedBot?.status;
     if (!isUploadingRef.current) return;
-    if (!status || status === 'installing' || status === 'starting') return;
+    // Stay in "uploading" UI while any in-progress status is active.
+    if (!status || status === 'installing' || status === 'starting' || status === 'connecting') return;
     isUploadingRef.current = false;
     setIsUploading(false);
-    if (status === 'running') {
-      toast.success('Bot is live and running!');
+    if (status === 'online' || status === 'running') {
+      toast.success('Bot is live and online!');
+    } else if (status === 'login_failed') {
+      toast.warning('Bot started but Discord connection failed — check your token and intents.');
+    } else if (status === 'crashed') {
+      toast.error('Bot crashed on startup — check the error logs below.');
     } else {
-      toast.error(status === 'crashed' ? 'Bot crashed on startup — check the error logs below.' : 'Deployment failed — check the error logs below.');
+      toast.error('Deployment failed — check the error logs below.');
     }
   }, [session?.hostedBot?.status]);
 
@@ -335,7 +365,10 @@ export default function Dashboard() {
 
   const { hostedBot } = session;
   const statusMeta = hostedBot ? getStatusMeta(hostedBot.status) : null;
-  const isProcessing = isUploading || hostedBot?.status === 'installing' || hostedBot?.status === 'starting';
+  const isProcessing = isUploading ||
+    hostedBot?.status === 'installing' ||
+    hostedBot?.status === 'starting' ||
+    hostedBot?.status === 'connecting';
 
   return (
     <div className="relative min-h-[100dvh] w-full overflow-hidden bg-background">
