@@ -638,17 +638,39 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
           tools: AI_TOOLS,
           tool_choice: "auto",
           temperature: 0.1,
-          max_tokens: 2000,
+          max_tokens: 1000,
         }),
       });
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
-        logger.error({ status: response.status, body: errText.slice(0, 300) }, "OpenRouter AI chat failed");
+        logger.error({ status: response.status, body: errText.slice(0, 400) }, "OpenRouter AI chat failed");
+
+        // Build a specific, actionable error message based on the status code.
+        let userError: string;
+        if (response.status === 402) {
+          // Insufficient credits — extract the "can only afford N" detail if present.
+          const afford = errText.match(/can only afford (\d+)/i);
+          const hint = afford ? ` (account balance: ~${afford[1]} tokens)` : "";
+          userError =
+            `The AI assistant is out of credits${hint}. ` +
+            `The server admin needs to add credits at openrouter.ai/settings/credits.`;
+        } else if (response.status === 429) {
+          userError = "The AI assistant is rate-limited. Please wait a moment and try again.";
+        } else if (response.status === 401) {
+          userError = "The OpenRouter API key is invalid. The server admin should check it in the admin panel.";
+        } else if (response.status >= 500) {
+          userError = "The AI provider is having an outage. Please try again in a few minutes.";
+        } else {
+          userError = `AI service error (${response.status}). Please try again shortly.`;
+        }
+
         if (turn === 0) {
-          res.status(502).json({ error: "AI service temporarily unavailable. Try again shortly." });
+          res.status(response.status === 402 || response.status === 401 ? 503 : 502).json({ error: userError });
           return;
         }
+        // Mid-conversation failure — break loop and return whatever we have so far.
+        finalContent = finalContent || userError;
         break;
       }
 
