@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
-    "@workspace/db": "^1.0.0",
+    "@workspace/db": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "discord.js": "^14.27.0",

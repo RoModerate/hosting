@@ -2079,120 +2079,194 @@ export async function restartHostedBot(
     .from(hostedBotsTable)
     .where(eq(hostedBotsTable.ticketId, ticketId));
 
-  if (!row || !row.extractPath || !row.startCommand) {
+  if (!row || !row.extractPath) {
     return { status: "error", message: "No bot has been uploaded to this ticket yet." };
   }
 
-  // Stop any running process and cancel queued restarts.
+  // ── 1. Stop old process ──────────────────────────────────────────────────
+  appendLiveLog(ticketId, "[Lumora] ── Stopping old process ──────────────────────────\n");
   stopProcess(ticketId);
   if (!opts?.isAutoRestart) {
     resetAutoRestartAttempts(ticketId);
-    // Clear the live log so the user sees fresh output for this restart attempt.
     clearLiveLog(ticketId);
+    appendLiveLog(ticketId, "[Lumora] ── Stopping old process ──────────────────────────\n");
   }
 
-  // row.extractPath is the persistent original bot dir (inside storage/).
-  // The actual run directory is the isolated /tmp copy. Re-isolate if it's
-  // gone (e.g. after a server restart that wiped /tmp).
-  const originalBotDir = row.extractPath;
-  if (!fs.existsSync(originalBotDir)) {
-    const message = "The previously extracted files are missing. Please re-upload the ZIP file.";
-    return reportFailure(ticketId, row.fileName, "error", { message });
+  // ── 2. Validate persistent files ────────────────────────────────────────
+  const persistentBotDir = row.extractPath;
+  if (!fs.existsSync(persistentBotDir)) {
+    return reportFailure(ticketId, row.fileName, "error", {
+      message: "The uploaded bot files are missing. Please use Replace to upload the ZIP again.",
+    });
   }
 
-  const tmpRoot = isolatedBotDir(ticketId);
-  let projectRoot = tmpRoot;
+  // ── 3. Re-isolate fresh from the persistent copy ─────────────────────────
+  // Always do this — never reuse a stale /tmp directory from a previous run.
+  // This clears dead node_modules, stale build artifacts, and leftover PIDs.
+  appendLiveLog(ticketId, "[Lumora] ── Cleaning deployment ───────────────────────────\n");
+  await updateHostedBot(ticketId, { status: "installing", errorMessage: "Preparing clean environment…", aiExplanation: null });
+  let projectRoot: string;
+  try {
+    projectRoot = await isolateBot(persistentBotDir, ticketId);
+    logger.info({ ticketId, persistentBotDir, projectRoot }, "Bot re-isolated for restart");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return reportFailure(ticketId, row.fileName, "error", {
+      message: "Failed to prepare the bot's run directory. Please try again.",
+      detail: msg,
+    });
+  }
 
-  if (!fs.existsSync(tmpRoot)) {
-    // /tmp was wiped (server restart). Re-isolate from the persistent copy.
-    appendLiveLog(ticketId, "[Lumora] Restoring bot files…\n");
-    await updateHostedBot(ticketId, { status: "installing", errorMessage: "Restoring bot files…" });
+  // ── 4. Detect language & package manager ─────────────────────────────────
+  const language = (row.language as BotLanguage) ?? "node";
+  let pkg: Record<string, unknown> | null = null;
+  let pm: PackageManager | null = null;
+
+  if (language === "node") {
     try {
-      projectRoot = await isolateBot(originalBotDir, ticketId);
-      // Re-install dependencies since node_modules was in the tmp dir.
-      const lang = (row.language as BotLanguage) ?? "node";
-      if (lang === "node") {
-        const pkgRaw = fs.existsSync(path.join(projectRoot, "package.json"))
-          ? fs.readFileSync(path.join(projectRoot, "package.json"), "utf-8") : "{}";
-        const pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
-        const pm = detectPackageManager(projectRoot, pkg);
-        const installArgs = pm === "pnpm" ? ["install", "--no-frozen-lockfile"]
-          : pm === "yarn" ? ["install", "--non-interactive"]
-          : ["install", "--no-audit", "--no-fund"];
-        appendLiveLog(ticketId, `[Lumora] Installing dependencies (${pm})…\n`);
-        await updateHostedBot(ticketId, { errorMessage: `Installing dependencies (${pm})… this may take a minute` });
-        const install = await runCommand(pm, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
-        if (!install.exitedCleanly) {
-          return reportFailure(ticketId, row.fileName, "error", {
-            message: "Dependency installation failed. Check the Logs tab for details.",
-            detail: install.output,
-          });
-        }
-      } else if (fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
-        appendLiveLog(ticketId, "[Lumora] Installing Python dependencies…\n");
-        await updateHostedBot(ticketId, { errorMessage: "Installing Python dependencies… this may take a minute" });
-        const install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
-        if (!install.exitedCleanly) {
-          return reportFailure(ticketId, row.fileName, "error", {
-            message: "Python dependency installation failed. Check the Logs tab for details.",
-            detail: install.output,
-          });
-        }
-      }
-      await updateHostedBot(ticketId, { errorMessage: null });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reportFailure(ticketId, row.fileName, "error", {
-        message: "Failed to restore the bot's files. Please try restarting again.",
-        detail: msg,
-      });
+      pkg = JSON.parse(
+        await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      pm = detectPackageManager(projectRoot, pkg);
+    } catch {
+      // package.json missing or malformed — install step will handle the error
     }
   }
 
-  await updateHostedBot(ticketId, { status: "starting", errorMessage: null, aiExplanation: null });
+  // ── 5. Install dependencies ──────────────────────────────────────────────
+  appendLiveLog(ticketId, "[Lumora] ── Checking dependencies ─────────────────────────\n");
+  await updateHostedBot(ticketId, { errorMessage: "Installing dependencies…" });
 
-  const [cmd, ...args] = row.startCommand.split(" ");
+  let install: { exitedCleanly: boolean; exitCode: number | null; output: string };
+  if (language === "node" && pm) {
+    const installArgs =
+      pm === "pnpm" ? ["install", "--no-frozen-lockfile"] :
+      pm === "yarn" ? ["install", "--non-interactive"] :
+      ["install", "--no-audit", "--no-fund"];
+    appendLiveLog(ticketId, `[Lumora] Package manager     : ${pm}\n`);
+    appendLiveLog(ticketId, `[Lumora] Install command     : ${pm} ${installArgs.join(" ")}\n`);
+    install = await runCommand(pm, installArgs, projectRoot, INSTALL_TIMEOUT_MS);
+  } else if (language === "python" && fs.existsSync(path.join(projectRoot, "requirements.txt"))) {
+    appendLiveLog(ticketId, `[Lumora] Install command     : ${PYTHON_BIN} ${PIP_INSTALL_ARGS.join(" ")}\n`);
+    install = await runCommand(PYTHON_BIN, PIP_INSTALL_ARGS, projectRoot, INSTALL_TIMEOUT_MS);
+  } else {
+    install = { exitedCleanly: true, exitCode: 0, output: "" };
+  }
+
+  if (!install.exitedCleanly) {
+    return reportFailure(ticketId, row.fileName, "error", {
+      message: language === "node"
+        ? "Dependency installation failed. Check the Logs tab for details."
+        : "Python dependency installation failed. Check requirements.txt.",
+      detail: install.output,
+    });
+  }
+  appendLiveLog(ticketId, "[Lumora] ✓ Dependencies ready\n");
+
+  // ── 6. Build step (TypeScript / compiled bots) ───────────────────────────
+  if (language === "node" && pm && pkg) {
+    const scripts = (pkg["scripts"] ?? {}) as Record<string, string>;
+    if (typeof scripts["build"] === "string") {
+      appendLiveLog(ticketId, "[Lumora] Running build script…\n");
+      const build = await runCommand(pm, ["run", "build"], projectRoot, INSTALL_TIMEOUT_MS);
+      if (!build.exitedCleanly) {
+        return reportFailure(ticketId, row.fileName, "error", {
+          message: 'The build step ("build" script in package.json) failed.',
+          detail: build.output,
+        });
+      }
+      appendLiveLog(ticketId, "[Lumora] ✓ Build complete\n");
+    }
+  }
+
+  // ── 7. Re-resolve start command from fresh package.json ──────────────────
+  let startCommand: StartCommand;
+  {
+    const resolved: StartCommand | { error: string } = language === "node" && pkg && pm
+      ? resolveNodeStartCommand(projectRoot, pkg, pm)
+      : language === "python"
+      ? resolvePythonStartCommand(projectRoot)
+      : { error: "Could not determine language or package.json." };
+
+    if ("error" in resolved) {
+      // Fallback to the stored command from the last successful deploy.
+      if (row.startCommand) {
+        const [storedCmd, ...storedArgs] = row.startCommand.split(" ");
+        startCommand = { cmd: storedCmd!, args: storedArgs, label: row.startCommand };
+        appendLiveLog(ticketId, `[Lumora] Using stored start command: ${row.startCommand}\n`);
+      } else {
+        return reportFailure(ticketId, row.fileName, "error", { message: resolved.error });
+      }
+    } else {
+      startCommand = resolved;
+      // Persist if it changed (e.g. build added a dist/ entry point).
+      if (startCommand.label !== row.startCommand) {
+        await updateHostedBot(ticketId, { startCommand: startCommand.label });
+      }
+    }
+  }
+
+  // ── 8. Pre-launch analysis ───────────────────────────────────────────────
   const userVars = resolveTokenAlias(await getHostedBotEnvVars(ticketId));
-  const probe = await runStartupProbe(cmd!, args, projectRoot, ticketId, userVars);
+  {
+    const preLaunch = await analyzeAndFixBeforeLaunch({
+      projectRoot,
+      persistentDir: persistentBotDir,
+      language,
+      pkg: pkg ?? {},
+      userVars,
+      ticketId,
+    });
+    for (const fix of preLaunch.fixes) {
+      appendLiveLog(ticketId, `[Lumora] Pre-launch: ${fix.description}\n`);
+    }
+    // If the analysis updated the start command, use the new one.
+    if (preLaunch.startCommand) {
+      const [fixedCmd, ...fixedArgs] = preLaunch.startCommand.split(" ");
+      if (fixedCmd) {
+        startCommand = { cmd: fixedCmd, args: fixedArgs, label: preLaunch.startCommand };
+        await updateHostedBot(ticketId, { startCommand: preLaunch.startCommand });
+      }
+    }
+  }
+
+  // ── 9. Start the bot ─────────────────────────────────────────────────────
+  appendLiveLog(
+    ticketId,
+    `[Lumora] ── Starting bot ──────────────────────────────────\n` +
+    `[Lumora] Start command      : ${startCommand.label}\n`,
+  );
+  await updateHostedBot(ticketId, { status: "starting", errorMessage: null, startCommand: startCommand.label });
+
+  // ── 10. Startup probe — waits for Discord ready signal ───────────────────
+  appendLiveLog(ticketId, "[Lumora] ── Waiting for Discord connection ─────────────────\n");
+  const probe = await runStartupProbe(startCommand.cmd, startCommand.args, projectRoot, ticketId, userVars);
 
   if (probe.crashed) {
     logger.warn(
       { ticketId, exitCode: probe.exitCode, outputTail: tail(probe.output, 500) },
       "Bot crashed on restart — attempting AI repair",
     );
-    await updateHostedBot(ticketId, { restartCount: row.restartCount + 1 });
 
-    // Run the same AI repair loop used during initial deploy.
-    const lang = (row.language as BotLanguage) ?? "node";
-    let pkgForRepair: Record<string, unknown> | null = null;
-    if (lang === "node") {
-      try {
-        pkgForRepair = JSON.parse(
-          await fsp.readFile(path.join(projectRoot, "package.json"), "utf-8"),
-        ) as Record<string, unknown>;
-      } catch { /* ignore */ }
-    }
-    const pmForRepair: PackageManager | null =
-      lang === "node" && pkgForRepair
-        ? detectPackageManager(projectRoot, pkgForRepair)
-        : null;
-
-    const [startCmdStr, ...startCmdArgs] = row.startCommand.split(" ");
-    const startCmdForRepair: StartCommand = {
-      cmd: startCmdStr!,
-      args: startCmdArgs,
-      label: row.startCommand,
-    };
+    // Immediately surface the crash so the UI leaves "Starting" at once.
+    await updateHostedBot(ticketId, {
+      status: "crashed",
+      errorMessage: probe.timedOut
+        ? "Bot started but never connected to Discord (90s timeout). Sending logs to AI repair..."
+        : "Bot process crashed on restart. Sending logs to AI repair...",
+      restartCount: row.restartCount + 1,
+      recentLog: tail(getLiveLog(ticketId), OUTPUT_TAIL_CHARS),
+    });
 
     const repairOutcome = await runRepairLoop({
       ticketId,
       projectRoot,
-      persistentBotDir: originalBotDir,
-      language: lang,
-      pkg: pkgForRepair,
-      pm: pmForRepair,
+      persistentBotDir,
+      language,
+      pkg,
+      pm,
       fileName: row.fileName,
-      startCmd: startCmdForRepair,
+      startCmd: startCommand,
       crashOutput: probe.output,
       userVars,
       onCrash,
@@ -2202,7 +2276,7 @@ export async function restartHostedBot(
       return {
         status: "running",
         message: repairOutcome.friendlyMessage,
-        startCommand: row.startCommand,
+        startCommand: startCommand.label,
       };
     }
 
@@ -2210,13 +2284,20 @@ export async function restartHostedBot(
     return reportFailure(ticketId, row.fileName, "crashed", {
       message: diagnosis ?? repairOutcome.friendlyMessage,
       detail: diagnosis ? probe.output : undefined,
-      startCommand: row.startCommand,
+      startCommand: startCommand.label,
     });
   }
 
-  // Probe resolves early on signal, so crashed=false only means online or login_failed.
+  // Probe resolves early on signal — crashed=false means online or login_failed.
   const restartStatus: HostStatus =
     probe.discordSignal === "online" ? "online" : "login_failed";
+
+  appendLiveLog(
+    ticketId,
+    restartStatus === "online"
+      ? "[Lumora] ── Online ─────────────────────────────────────────\n"
+      : "[Lumora] ── Login failed ───────────────────────────────────\n",
+  );
 
   attachSupervision(ticketId, probe.child, onCrash);
   await updateHostedBot(ticketId, {
