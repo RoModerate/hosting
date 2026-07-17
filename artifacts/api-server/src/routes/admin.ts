@@ -215,6 +215,7 @@ router.post("/admin/keys/generate", async (req, res) => {
       status: "active",
       expiresAt,
       hostingDurationDays: days,
+      createdByDiscordId: discordUserId || "admin",
     });
 
     logger.info({ ticketId, days }, "Admin generated hosting key");
