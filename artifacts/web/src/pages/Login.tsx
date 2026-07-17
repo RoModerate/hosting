@@ -152,7 +152,7 @@ export default function Login() {
               <button
                 onClick={handleDiscordLogin}
                 disabled={discordLoading}
-                className="w-full flex items-center justify-center gap-3 h-12 rounded-xl text-sm font-semibold bg-[#5865F2] hover:bg-[#6672f5] text-white transition-all duration-200 shadow-lg shadow-[#5865F2]/20 hover:shadow-[#5865F2]/30 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
+                className="w-full flex items-center justify-center gap-3 h-14 rounded-xl text-base font-semibold bg-[#5865F2] hover:bg-[#6672f5] text-white transition-all duration-200 shadow-lg shadow-[#5865F2]/20 hover:shadow-[#5865F2]/30 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
               >
                 {discordLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

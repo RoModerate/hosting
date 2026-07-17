@@ -8,9 +8,9 @@ import {
 const DISCORD_INVITE = 'https://discord.gg/4wEKPrgZmD';
 
 const RUNTIMES = [
-  { label: 'Node.js', note: 'discord.js · Eris · Sapphire', color: '#6ee7b7' },
-  { label: 'Python', note: 'discord.py · py-cord · hikari', color: '#93c5fd' },
-  { label: 'Java', note: 'JDA · Javacord · D4J', color: '#fca5a5' },
+  { label: 'Node.js', note: 'discord.js · Eris · Sapphire', icon: '/icon-nodejs.png' },
+  { label: 'Python', note: 'discord.py · py-cord · hikari', icon: '/icon-python.png' },
+  { label: 'Java', note: 'JDA · Javacord · D4J', icon: '/icon-java.png' },
 ];
 
 const FEATURES = [
@@ -144,9 +144,9 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6 md:px-12 py-10 flex flex-col md:flex-row items-center gap-8 md:gap-0">
           <p className="text-xs text-white/25 font-mono tracking-widest md:mr-14 shrink-0">SUPPORTED RUNTIMES</p>
           <div className="flex flex-col sm:flex-row gap-8 md:gap-16 w-full md:w-auto">
-            {RUNTIMES.map(({ label, note, color }) => (
+            {RUNTIMES.map(({ label, note, icon }) => (
               <div key={label} className="flex items-center gap-3">
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color, opacity: 0.7 }} />
+                <img src={icon} alt={label} className="h-7 w-7 object-contain shrink-0" />
                 <div>
                   <div className="text-sm font-semibold text-white/75">{label}</div>
                   <div className="text-xs text-white/28 mt-0.5">{note}</div>
