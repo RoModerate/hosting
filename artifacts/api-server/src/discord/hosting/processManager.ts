@@ -123,7 +123,7 @@ function clearStabilityTimer(ticketId: number): void {
  * counter so a bot that's been healthy for a while gets the full retry
  * budget again if it crashes later.
  */
-export function armStabilityReset(ticketId: number, stableAfterMs = 30_000): void {
+export function armStabilityReset(ticketId: number, stableAfterMs = 300_000): void {
   clearStabilityTimer(ticketId);
   const timer = setTimeout(() => {
     if (isRunning(ticketId)) {

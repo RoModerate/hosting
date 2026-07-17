@@ -351,7 +351,7 @@ When a user asks you to fix, modify, or create something:
 1. If you need to understand the code first, use read_file or list_files
 2. Apply fixes with write_file (always write complete file content, never partial)
 3. Use restart_bot after writing fixes so changes take effect
-4. Explain what you did and why
+4. Send a text message summarising exactly what you changed and why
 
 When a user asks you to undo:
 1. Call undo_last_change to restore the previous file state
@@ -365,7 +365,8 @@ When a user asks you to undo:
 - Never expose token/secret values even if you see them in files
 - After writing fixes, always restart the bot
 - When exploring a project for the first time, start with list_files to understand the structure
-- Supported runtimes: Node.js (discord.js, Eris, Sapphire), Python (discord.py, py-cord, hikari, disnake), Java (JDA, Javacord, D4J)`;
+- Supported runtimes: Node.js (discord.js, Eris, Sapphire), Python (discord.py, py-cord, hikari, disnake), Java (JDA, Javacord, D4J)
+- **YOU MUST ALWAYS END WITH A TEXT MESSAGE.** After every tool-call sequence, send a plain-text reply explaining what you did. Never let your final action be a tool call with no follow-up text — the user cannot see tool results directly.`;
 
   const ticketId = session.ticket.id;
 
@@ -471,6 +472,24 @@ When a user asks you to undo:
       for (const r of roundResults) {
         history.push({ role: "tool", tool_call_id: r.tool_call_id, content: r.result });
       }
+    }
+
+    // If the model completed all tool calls but sent no closing text, build a
+    // fallback summary so the user always sees a message (not just checkmarks).
+    if (!finalContent && allToolResults.length > 0) {
+      const actions = allToolResults.map((r) => {
+        if (r.tool === "write_file") return "applied a code fix";
+        if (r.tool === "restart_bot") return "restarted the bot";
+        if (r.tool === "install_dependencies") return "installed a dependency";
+        if (r.tool === "delete_file") return "deleted a file";
+        if (r.tool === "undo_last_change") return "undid the last change";
+        if (r.tool === "read_file" || r.tool === "list_files") return null; // read-only, skip
+        return r.tool.replace(/_/g, " ");
+      }).filter(Boolean);
+      const unique = [...new Set(actions)];
+      finalContent = unique.length > 0
+        ? `Done — ${unique.join(", ")}.`
+        : "Done.";
     }
 
     res.json({ content: finalContent, toolResults: allToolResults });
