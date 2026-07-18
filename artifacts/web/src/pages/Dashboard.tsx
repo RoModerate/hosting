@@ -202,10 +202,6 @@ function ProfileDropdown({ session }: { session: any }) {
 
           {/* Session info */}
           <div className="px-4 py-2.5 border-b border-white/[0.06]">
-            <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-white/30">Ticket</span>
-              <span className="text-white/50">#{session?.ticketId}</span>
-            </div>
             <div className="flex items-center justify-between text-[11px] font-mono mt-1">
               <span className="text-white/30">Expires</span>
               <span className="text-white/50">
@@ -693,6 +689,12 @@ export default function Dashboard() {
           <span className="font-mono font-bold text-sm tracking-[0.15em] text-white">LUMORA</span>
           <span className="h-3.5 w-px bg-white/[0.08] mx-1" />
           <span className="text-xs font-mono text-white/30 hidden sm:block">Portal</span>
+          <button
+            onClick={() => setLocation('/')}
+            className="hidden sm:flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-lg border border-white/[0.06] text-[11px] font-mono text-white/25 hover:text-white/55 hover:border-white/[0.12] hover:bg-white/[0.03] transition-all duration-200"
+          >
+            ← Home
+          </button>
         </div>
 
         <div className="flex items-center gap-3">

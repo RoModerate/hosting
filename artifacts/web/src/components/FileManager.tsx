@@ -24,6 +24,11 @@ import {
   RefreshCw,
   Search,
   X,
+  Zap,
+  Key,
+  Eye,
+  EyeOff,
+  CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -133,7 +138,6 @@ interface TreeNodeProps {
   depth: number;
   selectedPath: string | null;
   onSelect: (entry: FileEntry) => void;
-  /** Incrementing token — when it changes, expanded dirs re-load their children. */
   refreshToken: number;
 }
 
@@ -160,7 +164,6 @@ function TreeNode({ entry, depth, selectedPath, onSelect, refreshToken }: TreeNo
     setExpanded(!expanded);
   };
 
-  // Refresh children when the tree-wide refresh token increments.
   useEffect(() => {
     if (expanded && entry.type === 'directory') {
       setLoading(true);
@@ -239,6 +242,194 @@ function TreeNode({ entry, depth, selectedPath, onSelect, refreshToken }: TreeNo
   );
 }
 
+// ─── AI Settings Panel ────────────────────────────────────────────────────────
+
+function AISettingsPanel() {
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [hasSavedKey, setHasSavedKey] = useState(false);
+
+  // Load current key from bot env vars
+  useEffect(() => {
+    fetch(`${BASE}/api/bots/env`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data: any) => {
+        const vars: Record<string, string> = data.vars ?? {};
+        if (vars['OPENROUTER_API_KEY']) {
+          setHasSavedKey(true);
+          // Don't prefill the actual key for security — just show it's set
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      // Load current env vars, add/update the OPENROUTER_API_KEY
+      const r1 = await fetch(`${BASE}/api/bots/env`, { credentials: 'include' });
+      const data1 = await r1.json() as any;
+      const currentVars: Record<string, string> = data1.vars ?? {};
+      currentVars['OPENROUTER_API_KEY'] = apiKey.trim();
+
+      const r2 = await fetch(`${BASE}/api/bots/env`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vars: currentVars }),
+      });
+      if (!r2.ok) {
+        const d = await r2.json().catch(() => ({})) as any;
+        throw new Error(d?.error || 'Failed to save');
+      }
+      setHasSavedKey(true);
+      setApiKey('');
+      toast.success('AI key saved — restart your bot to apply AI repair.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!confirm('Remove your OpenRouter API key?')) return;
+    setSaving(true);
+    try {
+      const r1 = await fetch(`${BASE}/api/bots/env`, { credentials: 'include' });
+      const data1 = await r1.json() as any;
+      const currentVars: Record<string, string> = data1.vars ?? {};
+      delete currentVars['OPENROUTER_API_KEY'];
+
+      const r2 = await fetch(`${BASE}/api/bots/env`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vars: currentVars }),
+      });
+      if (!r2.ok) throw new Error('Failed to remove key');
+      setHasSavedKey(false);
+      toast.success('AI key removed.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to remove key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-xl bg-[#6366f1]/10 border border-[#6366f1]/20 flex items-center justify-center shrink-0">
+          <Zap className="h-3.5 w-3.5 text-[#6366f1]/70" />
+        </div>
+        <div>
+          <div className="font-mono text-xs text-white/70 font-semibold tracking-wider">AI SETTINGS</div>
+          <div className="text-[10px] font-mono text-white/30 mt-0.5">Bring your own OpenRouter key</div>
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-2">
+        <p className="text-xs font-mono text-white/40 leading-relaxed">
+          Lumora uses AI to automatically fix crashed bots and power the coding assistant.
+          Add your own free <span className="text-white/60">OpenRouter</span> API key so AI features work for your bot without using platform credits.
+        </p>
+        <a
+          href="https://openrouter.ai/keys"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] font-mono text-[#6366f1]/70 hover:text-[#6366f1] transition-colors"
+        >
+          Get a free key at openrouter.ai/keys →
+        </a>
+      </div>
+
+      {/* Current key status */}
+      {hasSavedKey && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+          <CheckCircle className="h-3.5 w-3.5 text-emerald-400/70 shrink-0" />
+          <span className="text-xs font-mono text-emerald-400/70 flex-1">API key is saved and active</span>
+          <button
+            onClick={handleRemove}
+            disabled={saving}
+            className="text-[10px] font-mono text-red-400/50 hover:text-red-400 transition-colors disabled:opacity-30"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+
+      {/* Key input */}
+      <div className="space-y-2">
+        <label className="text-[10px] font-mono text-white/35 tracking-wider">
+          {hasSavedKey ? 'UPDATE KEY' : 'YOUR OPENROUTER KEY'}
+        </label>
+        <div className="relative flex items-center">
+          <Key className="absolute left-3 h-3.5 w-3.5 text-white/20 pointer-events-none" />
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-or-..."
+            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-9 pr-10 py-2.5 font-mono text-xs text-white/65 placeholder:text-white/20 focus:outline-none focus:border-[#6366f1]/40 focus:ring-1 focus:ring-[#6366f1]/20 transition-colors"
+            spellCheck={false}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-3 text-white/20 hover:text-white/45 transition-colors"
+          >
+            {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+        <p className="text-[10px] font-mono text-white/20 leading-relaxed">
+          Key is stored securely with your bot secrets and never exposed in logs or the UI.
+        </p>
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving || !apiKey.trim()}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#6366f1]/80 hover:bg-[#6366f1] text-white text-xs font-mono font-semibold transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#6366f1]/20"
+      >
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+        {saving ? 'Saving…' : hasSavedKey ? 'Update Key' : 'Save Key'}
+      </button>
+
+      {/* What AI can do */}
+      <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-4 space-y-2.5">
+        <p className="text-[10px] font-mono text-white/30 tracking-wider">WITH YOUR KEY, AI CAN</p>
+        {[
+          'Automatically diagnose and fix crashes on startup',
+          'Read, edit, and write your bot files',
+          'Install missing packages automatically',
+          'Answer questions and explain errors in the AI chat',
+        ].map((item) => (
+          <div key={item} className="flex items-center gap-2">
+            <span className="text-emerald-500/50 text-[10px]">✓</span>
+            <span className="text-[11px] font-mono text-white/35">{item}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main FileManager component ───────────────────────────────────────────────
 
 interface FileManagerProps {
@@ -248,6 +439,9 @@ interface FileManagerProps {
 export default function FileManager({ hasBot }: FileManagerProps) {
   const queryClient = useQueryClient();
   const restartBot = useRestartBot();
+
+  // Sub-tab: 'files' | 'ai'
+  const [subTab, setSubTab] = useState<'files' | 'ai'>('files');
 
   // Tree state
   const [rootEntries, setRootEntries] = useState<FileEntry[] | null>(null);
@@ -322,10 +516,10 @@ export default function FileManager({ hasBot }: FileManagerProps) {
 
   // Load root tree when tab becomes active and a bot exists
   useEffect(() => {
-    if (hasBot && rootEntries === null) {
+    if (hasBot && rootEntries === null && subTab === 'files') {
       refreshRoot();
     }
-  }, [hasBot, rootEntries, refreshRoot]);
+  }, [hasBot, rootEntries, refreshRoot, subTab]);
 
   const handleSelectFile = async (entry: FileEntry) => {
     if (entry.type !== 'file') return;
@@ -415,7 +609,6 @@ export default function FileManager({ hasBot }: FileManagerProps) {
       const result = await uploadFile(file, targetDir) as any;
       toast.success(`Uploaded ${file.name}`);
       await refreshRoot();
-      // Auto-open the uploaded file if it looks like text
       if (result?.path) {
         const ext = result.path.split('.').pop();
         const textExts = ['js', 'ts', 'tsx', 'jsx', 'json', 'py', 'env', 'txt', 'md', 'sh', 'yml', 'yaml', 'toml', 'css', 'html', 'xml', 'csv', 'ini', 'properties', 'mjs', 'cjs'];
@@ -491,16 +684,39 @@ export default function FileManager({ hasBot }: FileManagerProps) {
 
   if (!hasBot) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="h-14 w-14 rounded-2xl border border-dashed border-border/50 flex items-center justify-center mb-4 opacity-40">
-          <Folder className="h-6 w-6 text-muted-foreground" />
+      <div className="rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
+        {/* Sub-tab bar even when no bot */}
+        <div className="flex items-center border-b border-border/40">
+          {(['files', 'ai'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setSubTab(tab)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-mono tracking-wide border-b-2 transition-all duration-200 -mb-px ${
+                subTab === tab
+                  ? 'border-[#6366f1] text-white/75'
+                  : 'border-transparent text-white/25 hover:text-white/50'
+              }`}
+            >
+              {tab === 'files' ? <Folder className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+              {tab === 'files' ? 'Files' : 'AI Settings'}
+            </button>
+          ))}
         </div>
-        <h3 className="font-mono text-sm font-semibold text-muted-foreground tracking-widest mb-2">
-          NO BOT UPLOADED YET
-        </h3>
-        <p className="text-xs font-mono text-muted-foreground/50 max-w-xs">
-          Upload a bot .zip file first, then come back here to browse and edit your bot's files.
-        </p>
+        {subTab === 'ai' ? (
+          <AISettingsPanel />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="h-14 w-14 rounded-2xl border border-dashed border-border/50 flex items-center justify-center mb-4 opacity-40">
+              <Folder className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="font-mono text-sm font-semibold text-muted-foreground tracking-widest mb-2">
+              NO BOT UPLOADED YET
+            </h3>
+            <p className="text-xs font-mono text-muted-foreground/50 max-w-xs">
+              Upload a bot .zip file first, then come back here to browse and edit your bot's files.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -517,329 +733,365 @@ export default function FileManager({ hasBot }: FileManagerProps) {
       className="rounded-xl border border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden"
       style={{ minHeight: 520 }}
     >
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-background/30 flex-wrap">
-        <span className="font-mono text-[10px] text-muted-foreground tracking-widest mr-1">FILES</span>
-
-        {/* New file */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
-          onClick={() => { setNewNameMode('file'); setNewNameInput(''); }}
-          title="New file"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          NEW FILE
-        </Button>
-
-        {/* New folder */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
-          onClick={() => { setNewNameMode('folder'); setNewNameInput(''); }}
-          title="New folder"
-        >
-          <FolderPlus className="h-3 w-3 mr-1" />
-          NEW FOLDER
-        </Button>
-
-        {/* Upload */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
-          onClick={() => uploadRef.current?.click()}
-          disabled={uploading}
-          title={`Upload file${currentDir ? ` to ${currentDir}/` : ''}`}
-        >
-          {uploading
-            ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            : <UploadCloud className="h-3 w-3 mr-1" />}
-          {uploading ? 'UPLOADING...' : 'UPLOAD'}
-        </Button>
-        <input
-          ref={uploadRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleUpload(file);
-          }}
-        />
-
-        <div className="flex-1" />
-
-        {/* Refresh tree */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
-          onClick={refreshRoot}
-          disabled={rootLoading}
-          title="Refresh file tree"
-        >
-          <RefreshCw className={`h-3 w-3 ${rootLoading ? 'animate-spin' : ''}`} />
-        </Button>
-
-        {/* Delete selected */}
-        {selectedEntry && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[10px] font-mono tracking-wider text-red-400/70 hover:text-red-400 hover:bg-red-500/10"
-            onClick={handleDelete}
-            title="Delete selected"
+      {/* Sub-tab bar */}
+      <div className="flex items-center border-b border-border/40 bg-background/20">
+        {(['files', 'ai'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setSubTab(tab)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-mono tracking-wide border-b-2 transition-all duration-200 -mb-px ${
+              subTab === tab
+                ? 'border-[#6366f1] text-white/75'
+                : 'border-transparent text-white/25 hover:text-white/50'
+            }`}
           >
-            <Trash2 className="h-3 w-3 mr-1" />
-            DELETE
-          </Button>
-        )}
-
-        {/* Save */}
-        {selectedEntry && !isBinary && (
-          <Button
-            size="sm"
-            className="h-7 px-3 text-[10px] font-mono tracking-wider bg-primary/80 hover:bg-primary text-primary-foreground border-0"
-            onClick={handleSave}
-            disabled={fileSaving || !isDirty}
-            title="Save (Ctrl+S)"
-          >
-            {fileSaving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
-            {fileSaving ? 'SAVING...' : isDirty ? 'SAVE*' : 'SAVED'}
-          </Button>
-        )}
-
-        {/* Restart */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-3 text-[10px] font-mono tracking-wider border-border/50 hover:border-primary/40"
-          onClick={handleRestartBot}
-          disabled={restartBot.isPending}
-          title="Restart bot"
-        >
-          <RotateCw className={`h-3 w-3 mr-1 ${restartBot.isPending ? 'animate-spin' : ''}`} />
-          {restartBot.isPending ? 'RESTARTING...' : 'RESTART BOT'}
-        </Button>
+            {tab === 'files' ? <Folder className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+            {tab === 'files' ? 'Files' : 'AI Settings'}
+          </button>
+        ))}
       </div>
 
-      {/* New name input bar */}
-      {newNameMode && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-primary/20 bg-primary/5">
-          <span className="text-[10px] font-mono text-primary/80 shrink-0">
-            {newNameMode === 'folder' ? 'New folder name:' : 'New file name:'}
-            {currentDir && <span className="text-muted-foreground"> in {currentDir}/</span>}
-          </span>
-          <input
-            ref={newNameRef}
-            value={newNameInput}
-            onChange={(e) => setNewNameInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleNewNameSubmit();
-              if (e.key === 'Escape') { setNewNameMode(null); setNewNameInput(''); }
+      {/* AI Settings tab */}
+      {subTab === 'ai' && <AISettingsPanel />}
+
+      {/* Files tab */}
+      {subTab === 'files' && (
+        <>
+          {/* Upload drop zone — prominent, full-width */}
+          <div
+            className="relative border-b border-border/30 bg-background/10"
+            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('bg-[#6366f1]/5', 'border-[#6366f1]/30'); }}
+            onDragLeave={(e) => { e.currentTarget.classList.remove('bg-[#6366f1]/5', 'border-[#6366f1]/30'); }}
+            onDrop={async (e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove('bg-[#6366f1]/5', 'border-[#6366f1]/30');
+              const file = e.dataTransfer.files[0];
+              if (file) handleUpload(file);
             }}
-            className="flex-1 bg-background/60 border border-primary/30 rounded px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:border-primary/60"
-            placeholder={newNameMode === 'folder' ? 'my-folder' : 'new-file.js'}
-            spellCheck={false}
-          />
-          <Button size="sm" className="h-6 px-3 text-[10px] font-mono" onClick={handleNewNameSubmit}>
-            CREATE
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-[10px] font-mono text-muted-foreground"
-            onClick={() => { setNewNameMode(null); setNewNameInput(''); }}
           >
-            CANCEL
-          </Button>
-        </div>
-      )}
+            <button
+              onClick={() => uploadRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 text-sm font-mono text-white/35 hover:text-white/65 hover:bg-[#6366f1]/[0.04] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {uploading
+                ? <Loader2 className="h-4 w-4 animate-spin text-[#6366f1]/60" />
+                : <UploadCloud className="h-4 w-4 text-[#6366f1]/50" />}
+              <span>{uploading ? 'Uploading…' : 'Upload file'}</span>
+              {!uploading && (
+                <span className="text-[10px] text-white/18 font-mono border border-white/[0.07] rounded px-1.5 py-0.5">
+                  or drag & drop
+                </span>
+              )}
+              {currentDir && !uploading && (
+                <span className="text-[10px] font-mono text-white/20">→ {currentDir}/</span>
+              )}
+            </button>
+            <input
+              ref={uploadRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleUpload(file);
+              }}
+            />
+          </div>
 
-      {/* Main pane: sidebar + editor */}
-      <div className="flex" style={{ height: 480 }}>
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-border/30 bg-background/20 flex-wrap">
+            <span className="font-mono text-[10px] text-muted-foreground tracking-widest mr-1">FILES</span>
 
-        {/* File tree sidebar */}
-        <div className="w-56 shrink-0 border-r border-border/40 flex flex-col bg-background/20">
-          {/* Search input */}
-          <div className="px-2 py-2 border-b border-border/30">
-            <div className="relative flex items-center">
-              {searchLoading
-                ? <Loader2 className="absolute left-2 h-3 w-3 animate-spin text-muted-foreground/40 pointer-events-none" />
-                : <Search className="absolute left-2 h-3 w-3 text-muted-foreground/40 pointer-events-none" />}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
+              onClick={() => { setNewNameMode('file'); setNewNameInput(''); }}
+              title="New file"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              NEW FILE
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
+              onClick={() => { setNewNameMode('folder'); setNewNameInput(''); }}
+              title="New folder"
+            >
+              <FolderPlus className="h-3 w-3 mr-1" />
+              NEW FOLDER
+            </Button>
+
+            <div className="flex-1" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] font-mono tracking-wider text-muted-foreground hover:text-foreground"
+              onClick={refreshRoot}
+              disabled={rootLoading}
+              title="Refresh file tree"
+            >
+              <RefreshCw className={`h-3 w-3 ${rootLoading ? 'animate-spin' : ''}`} />
+            </Button>
+
+            {selectedEntry && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[10px] font-mono tracking-wider text-red-400/70 hover:text-red-400 hover:bg-red-500/10"
+                onClick={handleDelete}
+                title="Delete selected"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                DELETE
+              </Button>
+            )}
+
+            {selectedEntry && !isBinary && (
+              <Button
+                size="sm"
+                className="h-7 px-3 text-[10px] font-mono tracking-wider bg-primary/80 hover:bg-primary text-primary-foreground border-0"
+                onClick={handleSave}
+                disabled={fileSaving || !isDirty}
+                title="Save (Ctrl+S)"
+              >
+                {fileSaving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
+                {fileSaving ? 'SAVING...' : isDirty ? 'SAVE*' : 'SAVED'}
+              </Button>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-3 text-[10px] font-mono tracking-wider border-border/50 hover:border-primary/40"
+              onClick={handleRestartBot}
+              disabled={restartBot.isPending}
+              title="Restart bot"
+            >
+              <RotateCw className={`h-3 w-3 mr-1 ${restartBot.isPending ? 'animate-spin' : ''}`} />
+              {restartBot.isPending ? 'RESTARTING...' : 'RESTART BOT'}
+            </Button>
+          </div>
+
+          {/* New name input bar */}
+          {newNameMode && (
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-primary/20 bg-primary/5">
+              <span className="text-[10px] font-mono text-primary/80 shrink-0">
+                {newNameMode === 'folder' ? 'New folder name:' : 'New file name:'}
+                {currentDir && <span className="text-muted-foreground"> in {currentDir}/</span>}
+              </span>
               <input
-                ref={searchRef}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search files…"
-                className="w-full bg-background/60 border border-border/40 rounded-md pl-7 pr-6 py-1 text-[11px] font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+                ref={newNameRef}
+                value={newNameInput}
+                onChange={(e) => setNewNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleNewNameSubmit();
+                  if (e.key === 'Escape') { setNewNameMode(null); setNewNameInput(''); }
+                }}
+                className="flex-1 bg-background/60 border border-primary/30 rounded px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:border-primary/60"
+                placeholder={newNameMode === 'folder' ? 'my-folder' : 'new-file.js'}
                 spellCheck={false}
               />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute right-1.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+              <Button size="sm" className="h-6 px-3 text-[10px] font-mono" onClick={handleNewNameSubmit}>
+                CREATE
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] font-mono text-muted-foreground"
+                onClick={() => { setNewNameMode(null); setNewNameInput(''); }}
+              >
+                CANCEL
+              </Button>
+            </div>
+          )}
+
+          {/* Main pane: sidebar + editor */}
+          <div className="flex" style={{ height: 460 }}>
+
+            {/* File tree sidebar */}
+            <div className="w-56 shrink-0 border-r border-border/40 flex flex-col bg-background/20">
+              {/* Search input */}
+              <div className="px-2 py-2 border-b border-border/30">
+                <div className="relative flex items-center">
+                  {searchLoading
+                    ? <Loader2 className="absolute left-2 h-3 w-3 animate-spin text-muted-foreground/40 pointer-events-none" />
+                    : <Search className="absolute left-2 h-3 w-3 text-muted-foreground/40 pointer-events-none" />}
+                  <input
+                    ref={searchRef}
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="Search files…"
+                    className="w-full bg-background/60 border border-border/40 rounded-md pl-7 pr-6 py-1.5 text-[11px] font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+                    spellCheck={false}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={clearSearch}
+                      className="absolute right-1.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tree or search results */}
+              <div className="flex-1 overflow-y-auto py-2">
+                {searchQuery.trim() ? (
+                  searchResults === null || searchLoading ? (
+                    <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
+                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      <span className="text-[10px] font-mono">Searching…</span>
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <Search className="h-5 w-5 text-muted-foreground/20 mb-2" />
+                      <p className="text-[10px] font-mono text-muted-foreground/40">No matches found</p>
+                      <p className="text-[9px] font-mono text-muted-foreground/25 mt-1">Searches by filename</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="px-3 pb-1">
+                        <span className="text-[9px] font-mono text-muted-foreground/30 tracking-widest">{searchResults.length} RESULT{searchResults.length !== 1 ? 'S' : ''}</span>
+                      </div>
+                      {searchResults.map((entry) => {
+                        const isSelected = selectedEntry?.path === entry.path;
+                        const dir = entry.path.includes('/')
+                          ? entry.path.split('/').slice(0, -1).join('/') + '/'
+                          : '';
+                        return (
+                          <button
+                            key={entry.path}
+                            className={`w-full flex items-start gap-1.5 px-3 py-1.5 text-left transition-colors ${isSelected ? 'bg-primary/15' : 'hover:bg-white/5'}`}
+                            onClick={() => { if (entry.type === 'file') handleSelectFile(entry); }}
+                            title={entry.path}
+                          >
+                            <span className="mt-0.5 shrink-0">
+                              {entry.type === 'directory'
+                                ? <Folder className="h-3 w-3 text-yellow-400/60" />
+                                : <FileIcon className={`h-3 w-3 ${isSelected ? 'text-primary' : 'text-muted-foreground/50'}`} />}
+                            </span>
+                            <span className="flex flex-col min-w-0">
+                              <span className={`text-[11px] font-mono font-medium truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>{entry.name}</span>
+                              {dir && <span className="text-[9px] font-mono text-muted-foreground/40 truncate">{dir}</span>}
+                            </span>
+                            {entry.type === 'file' && entry.size > 0 && (
+                              <span className="ml-auto text-[9px] text-muted-foreground/30 shrink-0 mt-0.5">{humanSize(entry.size)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  rootLoading && rootEntries === null ? (
+                    <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-[10px] font-mono">Loading...</span>
+                    </div>
+                  ) : rootEntries === null ? (
+                    <div className="px-4 py-6 text-[10px] font-mono text-muted-foreground/40">
+                      No files found
+                    </div>
+                  ) : rootEntries.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <Folder className="h-6 w-6 text-muted-foreground/20 mb-2" />
+                      <p className="text-[10px] font-mono text-muted-foreground/40">Empty directory</p>
+                      <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Upload a file to get started</p>
+                    </div>
+                  ) : (
+                    rootEntries.map((entry) => (
+                      <TreeNode
+                        key={entry.path}
+                        entry={entry}
+                        depth={0}
+                        selectedPath={selectedEntry?.path ?? null}
+                        onSelect={handleSelectFile}
+                        refreshToken={treeRefreshToken}
+                      />
+                    ))
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Editor pane */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {fileLoading ? (
+                <div className="flex items-center justify-center flex-1 gap-2 text-muted-foreground/50">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-xs font-mono">Opening file...</span>
+                </div>
+              ) : !selectedEntry ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-6">
+                  <FileIcon className="h-8 w-8 text-muted-foreground/15" />
+                  <div>
+                    <p className="text-xs font-mono text-muted-foreground/40">Select a file from the sidebar to edit it</p>
+                    <p className="text-[10px] font-mono text-muted-foreground/25 mt-1">Ctrl+S to save · Syntax highlighting for .js .ts .json .py .env</p>
+                  </div>
+                </div>
+              ) : isBinary ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-6">
+                  <Binary className="h-8 w-8 text-muted-foreground/20" />
+                  <div>
+                    <p className="text-xs font-mono text-muted-foreground/50 font-semibold">{selectedEntry.name}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">
+                      Binary file ({humanSize(fileSize)}) — cannot be edited as text.
+                    </p>
+                    <p className="text-[10px] font-mono text-muted-foreground/30 mt-0.5">
+                      Use Upload to replace it with a new version.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Editor header */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/30 bg-background/40 shrink-0">
+                    <FileIcon className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+                    <span className="text-[10px] font-mono text-muted-foreground truncate">{selectedEntry.path}</span>
+                    {isDirty && <span className="ml-auto text-[10px] font-mono text-yellow-400/80 shrink-0">● UNSAVED</span>}
+                    {fileTruncated && (
+                      <span className="flex items-center gap-1 text-[10px] font-mono text-orange-400/70 shrink-0">
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                        TRUNCATED (file &gt;4MB)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* CodeMirror editor */}
+                  <div className="flex-1 overflow-auto">
+                    <CodeMirror
+                      value={fileContent}
+                      height="100%"
+                      minHeight="420px"
+                      theme={oneDark}
+                      extensions={extensions}
+                      onChange={(val) => setFileContent(val)}
+                      basicSetup={{
+                        lineNumbers: true,
+                        foldGutter: true,
+                        dropCursor: true,
+                        allowMultipleSelections: false,
+                        indentOnInput: true,
+                        bracketMatching: true,
+                        closeBrackets: true,
+                        autocompletion: true,
+                        highlightSelectionMatches: true,
+                        searchKeymap: true,
+                      }}
+                      style={{ fontSize: '12px', fontFamily: 'var(--font-mono, monospace)' }}
+                    />
+                  </div>
+                </>
               )}
             </div>
           </div>
-
-          {/* Tree or search results */}
-          <div className="flex-1 overflow-y-auto py-2">
-            {searchQuery.trim() ? (
-              // ── Search results view ────────────────────────────────────
-              searchResults === null || searchLoading ? (
-                <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
-                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                  <span className="text-[10px] font-mono">Searching…</span>
-                </div>
-              ) : searchResults.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                  <Search className="h-5 w-5 text-muted-foreground/20 mb-2" />
-                  <p className="text-[10px] font-mono text-muted-foreground/40">No matches found</p>
-                </div>
-              ) : (
-                <div>
-                  <div className="px-3 pb-1">
-                    <span className="text-[9px] font-mono text-muted-foreground/30 tracking-widest">{searchResults.length} RESULT{searchResults.length !== 1 ? 'S' : ''}</span>
-                  </div>
-                  {searchResults.map((entry) => {
-                    const isSelected = selectedEntry?.path === entry.path;
-                    const dir = entry.path.includes('/')
-                      ? entry.path.split('/').slice(0, -1).join('/') + '/'
-                      : '';
-                    return (
-                      <button
-                        key={entry.path}
-                        className={`w-full flex items-start gap-1.5 px-3 py-1.5 text-left transition-colors ${isSelected ? 'bg-primary/15' : 'hover:bg-white/5'}`}
-                        onClick={() => { if (entry.type === 'file') handleSelectFile(entry); }}
-                        title={entry.path}
-                      >
-                        <span className="mt-0.5 shrink-0">
-                          {entry.type === 'directory'
-                            ? <Folder className="h-3 w-3 text-yellow-400/60" />
-                            : <FileIcon className={`h-3 w-3 ${isSelected ? 'text-primary' : 'text-muted-foreground/50'}`} />}
-                        </span>
-                        <span className="flex flex-col min-w-0">
-                          <span className={`text-[11px] font-mono font-medium truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>{entry.name}</span>
-                          {dir && <span className="text-[9px] font-mono text-muted-foreground/40 truncate">{dir}</span>}
-                        </span>
-                        {entry.type === 'file' && entry.size > 0 && (
-                          <span className="ml-auto text-[9px] text-muted-foreground/30 shrink-0 mt-0.5">{humanSize(entry.size)}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )
-            ) : (
-              // ── Normal file tree view ──────────────────────────────────
-              rootLoading && rootEntries === null ? (
-                <div className="flex items-center gap-2 px-4 py-6 text-muted-foreground/50">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span className="text-[10px] font-mono">Loading...</span>
-                </div>
-              ) : rootEntries === null ? (
-                <div className="px-4 py-6 text-[10px] font-mono text-muted-foreground/40">
-                  No files found
-                </div>
-              ) : rootEntries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                  <Folder className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                  <p className="text-[10px] font-mono text-muted-foreground/40">Empty directory</p>
-                  <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">Upload a file to get started</p>
-                </div>
-              ) : (
-                rootEntries.map((entry) => (
-                  <TreeNode
-                    key={entry.path}
-                    entry={entry}
-                    depth={0}
-                    selectedPath={selectedEntry?.path ?? null}
-                    onSelect={handleSelectFile}
-                    refreshToken={treeRefreshToken}
-                  />
-                ))
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Editor pane */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {fileLoading ? (
-            <div className="flex items-center justify-center flex-1 gap-2 text-muted-foreground/50">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-xs font-mono">Opening file...</span>
-            </div>
-          ) : !selectedEntry ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-6">
-              <FileIcon className="h-8 w-8 text-muted-foreground/15" />
-              <div>
-                <p className="text-xs font-mono text-muted-foreground/40">Select a file from the sidebar to edit it</p>
-                <p className="text-[10px] font-mono text-muted-foreground/25 mt-1">Ctrl+S to save • Syntax highlighting for .js .ts .json .py .env</p>
-              </div>
-            </div>
-          ) : isBinary ? (
-            <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-6">
-              <Binary className="h-8 w-8 text-muted-foreground/20" />
-              <div>
-                <p className="text-xs font-mono text-muted-foreground/50 font-semibold">{selectedEntry.name}</p>
-                <p className="text-[10px] font-mono text-muted-foreground/30 mt-1">
-                  Binary file ({humanSize(fileSize)}) — cannot be edited as text.
-                </p>
-                <p className="text-[10px] font-mono text-muted-foreground/30 mt-0.5">
-                  Use Upload to replace it with a new version.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Editor header */}
-              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/30 bg-background/40 shrink-0">
-                <FileIcon className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-                <span className="text-[10px] font-mono text-muted-foreground truncate">{selectedEntry.path}</span>
-                {isDirty && <span className="ml-auto text-[10px] font-mono text-yellow-400/80 shrink-0">● UNSAVED</span>}
-                {fileTruncated && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono text-orange-400/70 shrink-0">
-                    <AlertTriangle className="h-2.5 w-2.5" />
-                    TRUNCATED (file &gt;4MB)
-                  </span>
-                )}
-              </div>
-
-              {/* CodeMirror editor */}
-              <div className="flex-1 overflow-auto">
-                <CodeMirror
-                  value={fileContent}
-                  height="100%"
-                  minHeight="440px"
-                  theme={oneDark}
-                  extensions={extensions}
-                  onChange={(val) => setFileContent(val)}
-                  basicSetup={{
-                    lineNumbers: true,
-                    foldGutter: true,
-                    dropCursor: true,
-                    allowMultipleSelections: false,
-                    indentOnInput: true,
-                    bracketMatching: true,
-                    closeBrackets: true,
-                    autocompletion: true,
-                    highlightSelectionMatches: true,
-                    searchKeymap: true,
-                  }}
-                  style={{ fontSize: '12px', fontFamily: 'var(--font-mono, monospace)' }}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

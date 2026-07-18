@@ -503,30 +503,30 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env["OPENROUTER_API_KEY"];
-  if (!apiKey) {
-    const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
-    if (!row) {
-      res.status(503).json({ error: "AI assistant is not configured on this server. Set OPENROUTER_API_KEY in the admin panel." });
-      return;
-    }
-  }
+  const ticketId = session.ticket.id;
 
-  const resolvedApiKey = apiKey || await (async () => {
-    const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
-    return row?.value;
-  })();
+  // Resolve OpenRouter key: system env > DB admin config > user's own bot env vars
+  let resolvedApiKey = process.env["OPENROUTER_API_KEY"] || "";
 
   if (!resolvedApiKey) {
-    res.status(503).json({ error: "AI assistant is not configured on this server." });
-    return;
+    // Check DB admin config
+    const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
+    if (row?.value) resolvedApiKey = row.value;
   }
 
-  const ticketId = session.ticket.id;
+  if (!resolvedApiKey) {
+    // Check user's own bot env vars (set via AI Settings in File Manager)
+    const { getHostedBotEnvVars } = await import("../discord/hosting/runner");
+    const userVars = await getHostedBotEnvVars(ticketId);
+    resolvedApiKey = userVars["OPENROUTER_API_KEY"] || "";
+  }
+
+  if (!resolvedApiKey) {
+    res.status(503).json({ error: "AI assistant is not configured. Add your OpenRouter API key in Files → AI Settings." });
+    return;
+  }
   const bot = await getHostedBotStatus(ticketId);
   const liveLog = getLiveLog(ticketId);
 

@@ -324,10 +324,12 @@ async function callRepairAI(params: {
   fileName: string;
   attemptNumber: number;
   knowledge: string;
+  /** Per-user key (from bot env vars) used as fallback when system key is absent. */
+  userApiKey?: string;
 }): Promise<AIRepairPlan | null> {
-  const apiKey = process.env["OPENROUTER_API_KEY"];
+  const apiKey = process.env["OPENROUTER_API_KEY"] || params.userApiKey || "";
   if (!apiKey) {
-    logger.warn("OPENROUTER_API_KEY not set — skipping AI repair");
+    logger.warn("No OPENROUTER_API_KEY available — skipping AI repair (user can add one in AI Settings)");
     return null;
   }
 
@@ -566,10 +568,12 @@ export async function repairCrashedBot(params: {
   attemptNumber: number;
   fileName: string;
   ticketId: number;
+  /** Per-user OpenRouter key (from bot env vars) used as fallback. */
+  userApiKey?: string;
 }): Promise<RepairResult> {
   const {
     projectRoot, persistentDir, language, pkg, crashOutput,
-    userVars: _userVars, attemptNumber, fileName, ticketId,
+    userVars: _userVars, attemptNumber, fileName, ticketId, userApiKey,
   } = params;
 
   try {
@@ -590,6 +594,7 @@ export async function repairCrashedBot(params: {
       fileName,
       attemptNumber,
       knowledge,
+      userApiKey,
     });
 
     if (!plan) {

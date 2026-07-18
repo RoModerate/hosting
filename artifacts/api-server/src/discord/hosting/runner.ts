@@ -1428,6 +1428,7 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
       crashLogs: crashOutput,
       pkg,
       attemptNumber: attempt,
+      userApiKey: userVars["OPENROUTER_API_KEY"],
     });
 
     for (const fix of repair.appliedFixes) {
@@ -1943,8 +1944,9 @@ export async function hostUploadedZip(params: {
   // ── Autonomous AI pre-launch agent ─────────────────────────────────────
   // Runs a multi-turn AI agent that inspects every file, detects problems,
   // and applies fixes BEFORE the first startup probe. Falls back gracefully
-  // when OPENROUTER_API_KEY is not configured.
-  if (process.env["OPENROUTER_API_KEY"]) {
+  // when no OPENROUTER_API_KEY is available (system env or user bot env).
+  const effectiveOpenRouterKey = process.env["OPENROUTER_API_KEY"] || userVars["OPENROUTER_API_KEY"];
+  if (effectiveOpenRouterKey) {
     const preLaunchAgent = await runAutonomousAgent({
       context: {
         ticketId,
@@ -1956,6 +1958,7 @@ export async function hostUploadedZip(params: {
       },
       mode: "pre_launch",
       pkg: pkg ?? null,
+      userApiKey: userVars["OPENROUTER_API_KEY"],
     });
 
     if (preLaunchAgent.requiresUserAction) {

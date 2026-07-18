@@ -587,15 +587,17 @@ export async function runAutonomousAgent(params: {
   crashLogs?: string;
   pkg: Record<string, unknown> | null;
   attemptNumber?: number;
+  /** Optional per-user OpenRouter key (from bot env vars); used when system key is absent. */
+  userApiKey?: string;
 }): Promise<AgentResult> {
-  const { context: ctx, mode, crashLogs, pkg, attemptNumber = 1 } = params;
+  const { context: ctx, mode, crashLogs, pkg, attemptNumber = 1, userApiKey } = params;
 
-  const apiKey = process.env["OPENROUTER_API_KEY"] ?? "";
+  const apiKey = process.env["OPENROUTER_API_KEY"] || userApiKey || "";
   if (!apiKey) {
     // Fall back gracefully — no AI configured
     return {
       appliedFixes: [],
-      friendlyMessage: "AI deployment agent is not configured (OPENROUTER_API_KEY missing).",
+      friendlyMessage: "AI deployment agent is not configured. Add your OpenRouter API key in Files → AI Settings.",
       requiresUserAction: false,
     };
   }

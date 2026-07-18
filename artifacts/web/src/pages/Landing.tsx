@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import {
   Github, Shield, Activity, RotateCw, Bot,
@@ -31,30 +30,19 @@ const STATS = [
 
 export default function Landing() {
   const [, setLocation] = useLocation();
-  const heroRef = useRef<HTMLDivElement>(null);
-
-  // Subtle parallax on the hero glow
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return;
-    const handler = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 20;
-      const y = (e.clientY / window.innerHeight - 0.5) * 20;
-      el.style.transform = `translate(${x}px, ${y}px)`;
-    };
-    window.addEventListener('mousemove', handler);
-    return () => window.removeEventListener('mousemove', handler);
-  }, []);
 
   return (
     <div className="min-h-screen w-full bg-[#080810] text-[#c8cde8] overflow-x-hidden animate-page-in">
 
-      {/* ─── Background glows ─── */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+      {/* ─── Background glows (static, GPU-composited — no JS transform) ─── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ willChange: 'auto' }}>
         <div
-          ref={heroRef}
-          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full opacity-[0.07] transition-transform duration-700 ease-out"
-          style={{ background: 'radial-gradient(ellipse, #6366f1 0%, transparent 70%)' }}
+          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full opacity-[0.07]"
+          style={{
+            background: 'radial-gradient(ellipse, #6366f1 0%, transparent 70%)',
+            transform: 'translate(-50%, 0) translateZ(0)',
+            backfaceVisibility: 'hidden',
+          }}
         />
         <div className="absolute bottom-0 right-0 w-[600px] h-[400px] rounded-full opacity-[0.04]"
           style={{ background: 'radial-gradient(ellipse, #a78bfa 0%, transparent 70%)' }}
@@ -75,9 +63,8 @@ export default function Landing() {
             href={DISCORD_INVITE}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 hover:text-[#5865F2] transition-colors duration-200"
+            className="hover:text-[#5865F2] transition-colors duration-200"
           >
-            <MessageSquare className="h-3.5 w-3.5" />
             Discord
           </a>
         </div>
