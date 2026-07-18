@@ -19,7 +19,7 @@ import { execSync } from "node:child_process";
 const router: IRouter = Router();
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile";
+const MODEL = process.env["GROQ_MODEL"] || "llama-3.1-8b-instant";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
 
@@ -569,8 +569,12 @@ ${botContext}${consoleContext}
 - **install_dependencies** — Install a missing npm or pip package.
 - **restart_bot** — Restart the bot to apply changes.
 
+## When to use tools
+- **Only call tools when the user is asking about their bot or requesting a fix.** For greetings, general questions, or anything not bot-related, reply directly without calling any tools.
+- If the bot status above already shows the information the user needs, answer from it directly — do not call \`check_status\` or \`view_logs\` again just to confirm.
+
 ## Autonomous Repair Workflow
-When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT waiting for user input:
+Only trigger this when the user explicitly asks you to fix/diagnose, or when the bot status above shows crashed/error:
 1. Call \`view_logs\` to see what happened
 2. Call \`check_status\` for the full error context
 3. Identify the SPECIFIC root cause (not just "it crashed")
