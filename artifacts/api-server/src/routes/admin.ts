@@ -12,8 +12,8 @@ const CONFIG_KEYS = [
   "DISCORD_GUILD_ID",
   "DISCORD_STAFF_ROLE_ID",
   "DISCORD_TICKET_CATEGORY_NAME",
-  "OPENROUTER_API_KEY",
-  "OPENROUTER_MODEL",
+  "HF_API_KEY",
+  "HF_MODEL",
 ] as const;
 
 function getAdminPassword(): string {

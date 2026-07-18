@@ -18,8 +18,8 @@ import { execSync } from "node:child_process";
 
 const router: IRouter = Router();
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
+const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
 
@@ -503,13 +503,13 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env["OPENROUTER_API_KEY"];
+  const apiKey = process.env["HF_API_KEY"];
   if (!apiKey) {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "HF_API_KEY"));
     if (!row) {
-      res.status(503).json({ error: "AI assistant is not configured on this server. Set OPENROUTER_API_KEY in the admin panel." });
+      res.status(503).json({ error: "AI assistant is not configured on this server. Set HF_API_KEY in the admin panel." });
       return;
     }
   }
@@ -517,7 +517,7 @@ router.post("/ai/chat", async (req, res) => {
   const resolvedApiKey = apiKey || await (async () => {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "HF_API_KEY"));
     return row?.value;
   })();
 
@@ -624,13 +624,11 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
     let finalContent = "";
 
     for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-      const response = await fetch(OPENROUTER_URL, {
+      const response = await fetch(HF_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${resolvedApiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://lumora.host",
-          "X-Title": "Lumora Portal AI",
         },
         body: JSON.stringify({
           model: MODEL,
@@ -644,21 +642,16 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
-        logger.error({ status: response.status, body: errText.slice(0, 400) }, "OpenRouter AI chat failed");
+        logger.error({ status: response.status, body: errText.slice(0, 400) }, "HuggingFace AI chat failed");
 
         // Build a specific, actionable error message based on the status code.
         let userError: string;
-        if (response.status === 402) {
-          // Insufficient credits — extract the "can only afford N" detail if present.
-          const afford = errText.match(/can only afford (\d+)/i);
-          const hint = afford ? ` (account balance: ~${afford[1]} tokens)` : "";
-          userError =
-            `The AI assistant is out of credits${hint}. ` +
-            `The server admin needs to add credits at openrouter.ai/settings/credits.`;
+        if (response.status === 401) {
+          userError = "The Hugging Face API key is invalid. The server admin should check it in the admin panel.";
         } else if (response.status === 429) {
           userError = "The AI assistant is rate-limited. Please wait a moment and try again.";
-        } else if (response.status === 401) {
-          userError = "The OpenRouter API key is invalid. The server admin should check it in the admin panel.";
+        } else if (response.status === 503) {
+          userError = "The AI model is loading, please try again in a few seconds.";
         } else if (response.status >= 500) {
           userError = "The AI provider is having an outage. Please try again in a few minutes.";
         } else {

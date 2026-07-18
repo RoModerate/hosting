@@ -1,23 +1,23 @@
 import { logger } from "../../lib/logger";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
+const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
 
 /**
- * Ask an LLM (via OpenRouter, using the operator's own account) to translate a
- * raw hosting failure/error log into a short, plain-language explanation for
- * the customer. Returns null (never throws) if the key is missing or the
- * request fails, so hosting flows never block on this.
+ * Ask an LLM (via Hugging Face Inference API) to translate a raw hosting
+ * failure/error log into a short, plain-language explanation for the customer.
+ * Returns null (never throws) if the key is missing or the request fails,
+ * so hosting flows never block on this.
  */
 export async function explainHostingFailure(params: {
   message: string;
   detail?: string;
   fileName: string;
 }): Promise<string | null> {
-  const apiKey = process.env["OPENROUTER_API_KEY"];
+  const apiKey = process.env["HF_API_KEY"];
   if (!apiKey) {
     logger.warn(
-      "OPENROUTER_API_KEY not set; skipping AI failure explanation",
+      "HF_API_KEY not set; skipping AI failure explanation",
     );
     return null;
   }
@@ -35,7 +35,7 @@ export async function explainHostingFailure(params: {
     .join("\n\n");
 
   try {
-    const response = await fetch(OPENROUTER_URL, {
+    const response = await fetch(HF_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -52,7 +52,7 @@ export async function explainHostingFailure(params: {
       const text = await response.text().catch(() => "");
       logger.error(
         { status: response.status, text },
-        "OpenRouter request failed",
+        "HuggingFace request failed",
       );
       return null;
     }
@@ -63,7 +63,7 @@ export async function explainHostingFailure(params: {
     const content = data.choices?.[0]?.message?.content?.trim();
     return content || null;
   } catch (err) {
-    logger.error({ err }, "Failed to call OpenRouter for failure explanation");
+    logger.error({ err }, "Failed to call HuggingFace for failure explanation");
     return null;
   }
 }

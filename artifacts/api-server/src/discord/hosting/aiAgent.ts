@@ -24,8 +24,8 @@ import { buildFileTree, loadKnowledge } from "./aiRepair";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
+const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
 
 /** Max tool-call rounds per agent session. Keeps latency bounded. */
 const MAX_AGENT_TURNS = 12;
@@ -537,19 +537,17 @@ async function callOpenRouter(
       body["tool_choice"] = "auto";
     }
 
-    const res = await fetch(OPENROUTER_URL, {
+    const res = await fetch(HF_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://lumora.host",
-        "X-Title": "Lumora Deployment Agent",
       },
       body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      logger.error({ status: res.status }, "OpenRouter agent call failed");
+      logger.error({ status: res.status }, "HuggingFace agent call failed");
       return null;
     }
 
@@ -568,7 +566,7 @@ async function callOpenRouter(
       toolCalls: msg?.tool_calls ?? [],
     };
   } catch (err) {
-    logger.error({ err }, "Failed to call OpenRouter for agent");
+    logger.error({ err }, "Failed to call HuggingFace for agent");
     return null;
   }
 }
@@ -590,12 +588,12 @@ export async function runAutonomousAgent(params: {
 }): Promise<AgentResult> {
   const { context: ctx, mode, crashLogs, pkg, attemptNumber = 1 } = params;
 
-  const apiKey = process.env["OPENROUTER_API_KEY"] ?? "";
+  const apiKey = process.env["HF_API_KEY"] ?? "";
   if (!apiKey) {
     // Fall back gracefully — no AI configured
     return {
       appliedFixes: [],
-      friendlyMessage: "AI deployment agent is not configured (OPENROUTER_API_KEY missing).",
+      friendlyMessage: "AI deployment agent is not configured (HF_API_KEY missing).",
       requiresUserAction: false,
     };
   }
