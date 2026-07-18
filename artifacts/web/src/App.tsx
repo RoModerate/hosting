@@ -8,6 +8,7 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Admin from '@/pages/Admin';
 import DiscordCallback from '@/pages/DiscordCallback';
+import Banner from '@/pages/Banner';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
@@ -16,6 +17,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/banner" component={Banner} />
       <Route path="/login" component={Login} />
       <Route path="/auth/discord/callback" component={DiscordCallback} />
       <Route path="/dashboard" component={Dashboard} />

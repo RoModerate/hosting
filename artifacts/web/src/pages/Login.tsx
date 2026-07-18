@@ -16,14 +16,14 @@ type RedeemFormValues = z.infer<typeof redeemSchema>;
 
 const DISCORD_INVITE = 'https://discord.gg/4wEKPrgZmD';
 
-function getErrorMessage(code: string | null): string | null {
+function getErrorMessage(code: string | null): { text: string; isAdmin?: boolean } | null {
   if (!code) return null;
-  const map: Record<string, string> = {
-    no_ticket: 'No hosting access found for your Discord account. Contact staff to get a key.',
-    discord_denied: 'Discord authorization was cancelled.',
-    oauth_failed: 'Discord authentication failed. Please try again.',
-    no_access: 'No hosting access found for your Discord account. Contact staff to get a key.',
-    key_expired: 'Your hosting access has expired. Contact staff to renew.',
+  const map: Record<string, { text: string; isAdmin?: boolean }> = {
+    no_ticket: { text: 'Your Discord account isn\'t linked to any hosting plan. If you\'re the platform admin, issue yourself a key from the admin panel first.', isAdmin: true },
+    discord_denied: { text: 'Discord authorization was cancelled.' },
+    oauth_failed: { text: 'Discord authentication failed. Please try again.' },
+    no_access: { text: 'Your Discord account isn\'t linked to any hosting plan. Contact staff to get a key.' },
+    key_expired: { text: 'Your hosting access has expired. Contact staff to renew.' },
   };
   return map[code] ?? null;
 }
@@ -114,12 +114,25 @@ export default function Login() {
         </div>
 
         {/* Error from OAuth redirect */}
-        {urlError && getErrorMessage(urlError) && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/[0.07]">
-            <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300/70 font-mono">{getErrorMessage(urlError)}</p>
-          </div>
-        )}
+        {urlError && getErrorMessage(urlError) && (() => {
+          const err = getErrorMessage(urlError)!;
+          return (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/[0.07]">
+              <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
+              <div className="space-y-1.5">
+                <p className="text-xs text-red-300/70 font-mono">{err.text}</p>
+                {err.isAdmin && (
+                  <a
+                    href="/admin"
+                    className="inline-flex items-center gap-1 text-[11px] font-mono text-[#6366f1]/70 hover:text-[#6366f1] transition-colors underline underline-offset-2"
+                  >
+                    Go to Admin Panel →
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Card */}
         <div
@@ -231,8 +244,8 @@ export default function Login() {
           )}
         </div>
 
-        {/* Footer link */}
-        <div className="text-center">
+        {/* Footer links */}
+        <div className="flex flex-col items-center gap-2.5">
           <a
             href={DISCORD_INVITE}
             target="_blank"
@@ -241,6 +254,13 @@ export default function Login() {
           >
             <ExternalLink className="h-3 w-3" />
             Join our Discord for support
+          </a>
+          <a
+            href="/admin"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono text-white/15 hover:text-white/40 transition-colors"
+          >
+            <KeyRound className="h-3 w-3" />
+            Admin Panel
           </a>
         </div>
       </div>

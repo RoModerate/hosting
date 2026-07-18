@@ -36,7 +36,6 @@ minimumReleaseAgeExclude:
 
 packages:
   - artifacts/*
-  - bots/*
   - lib/*
   - lib/integrations/*
   - scripts

@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "5qPpnk7J9MlyAz6MTtwEM"
+uri = "file://assets/lumora-youtube-banner.jpg"
+type = "image"
+title = "Lumora YouTube Banner — Updated"
