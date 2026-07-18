@@ -1,7 +1,7 @@
 import { logger } from "../../lib/logger";
 
-const HF_URL = "https://router.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile";
 
 /**
  * Ask an LLM (via Hugging Face Inference API) to translate a raw hosting
@@ -14,10 +14,10 @@ export async function explainHostingFailure(params: {
   detail?: string;
   fileName: string;
 }): Promise<string | null> {
-  const apiKey = process.env["HF_API_KEY"];
+  const apiKey = process.env["GROQ_API_KEY"];
   if (!apiKey) {
     logger.warn(
-      "HF_API_KEY not set; skipping AI failure explanation",
+      "GROQ_API_KEY not set; skipping AI failure explanation",
     );
     return null;
   }
@@ -35,7 +35,7 @@ export async function explainHostingFailure(params: {
     .join("\n\n");
 
   try {
-    const response = await fetch(HF_URL, {
+    const response = await fetch(GROQ_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -52,7 +52,7 @@ export async function explainHostingFailure(params: {
       const text = await response.text().catch(() => "");
       logger.error(
         { status: response.status, text },
-        "HuggingFace request failed",
+        "Groq request failed",
       );
       return null;
     }
@@ -63,7 +63,7 @@ export async function explainHostingFailure(params: {
     const content = data.choices?.[0]?.message?.content?.trim();
     return content || null;
   } catch (err) {
-    logger.error({ err }, "Failed to call HuggingFace for failure explanation");
+    logger.error({ err }, "Failed to call Groq for failure explanation");
     return null;
   }
 }

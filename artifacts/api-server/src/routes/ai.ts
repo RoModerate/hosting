@@ -18,8 +18,8 @@ import { execSync } from "node:child_process";
 
 const router: IRouter = Router();
 
-const HF_URL = "https://router.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
 
@@ -503,13 +503,13 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env["HF_API_KEY"];
+  const apiKey = process.env["GROQ_API_KEY"];
   if (!apiKey) {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "HF_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "GROQ_API_KEY"));
     if (!row) {
-      res.status(503).json({ error: "AI assistant is not configured on this server. Set HF_API_KEY in the admin panel." });
+      res.status(503).json({ error: "AI assistant is not configured on this server. Set GROQ_API_KEY in the admin panel." });
       return;
     }
   }
@@ -517,7 +517,7 @@ router.post("/ai/chat", async (req, res) => {
   const resolvedApiKey = apiKey || await (async () => {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "HF_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "GROQ_API_KEY"));
     return row?.value;
   })();
 
@@ -624,7 +624,7 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
     let finalContent = "";
 
     for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-      const response = await fetch(HF_URL, {
+      const response = await fetch(GROQ_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${resolvedApiKey}`,
@@ -642,20 +642,16 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
-        logger.error({ status: response.status, body: errText.slice(0, 400) }, "HuggingFace AI chat failed");
+        logger.error({ status: response.status, body: errText.slice(0, 400) }, "Groq AI chat failed");
 
         // Build a specific, actionable error message based on the status code.
         let userError: string;
         if (response.status === 401) {
-          userError = "The Hugging Face API key is invalid. The server admin should check it in the admin panel.";
-        } else if (response.status === 402) {
-          userError = "Your Hugging Face account has run out of monthly inference credits. Add pre-paid credits or upgrade to HF PRO at huggingface.co/settings/billing.";
+          userError = "The Groq API key is invalid. The server admin should check it in the admin panel.";
         } else if (response.status === 429) {
-          userError = "The AI assistant is rate-limited. Please wait a moment and try again.";
-        } else if (response.status === 503) {
-          userError = "The AI model is loading, please try again in a few seconds.";
+          userError = "The AI assistant has hit Groq's rate limit. Please wait a moment and try again.";
         } else if (response.status >= 500) {
-          userError = "The AI provider is having an outage. Please try again in a few minutes.";
+          userError = "Groq is having an outage. Please try again in a few minutes.";
         } else {
           userError = `AI service error (${response.status}). Please try again shortly.`;
         }

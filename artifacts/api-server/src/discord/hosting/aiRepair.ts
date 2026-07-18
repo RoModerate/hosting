@@ -25,8 +25,8 @@ import { appendLiveLog } from "./processManager";
 
 export const MAX_REPAIR_ATTEMPTS = 3;
 
-const HF_URL = "https://router.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile";
 
 /**
  * Knowledge base lives at the workspace root so it is easy for operators to
@@ -325,9 +325,9 @@ async function callRepairAI(params: {
   attemptNumber: number;
   knowledge: string;
 }): Promise<AIRepairPlan | null> {
-  const apiKey = process.env["HF_API_KEY"];
+  const apiKey = process.env["GROQ_API_KEY"];
   if (!apiKey) {
-    logger.warn("HF_API_KEY not set — skipping AI repair");
+    logger.warn("GROQ_API_KEY not set — skipping AI repair");
     return null;
   }
 
@@ -385,7 +385,7 @@ async function callRepairAI(params: {
     .join("\n");
 
   try {
-    const response = await fetch(HF_URL, {
+    const response = await fetch(GROQ_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -400,7 +400,7 @@ async function callRepairAI(params: {
     });
 
     if (!response.ok) {
-      logger.error({ status: response.status }, "HuggingFace AI repair request failed");
+      logger.error({ status: response.status }, "Groq AI repair request failed");
       return null;
     }
 
