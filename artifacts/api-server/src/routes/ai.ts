@@ -648,6 +648,8 @@ When the bot is crashed, erroring, or misbehaving — act immediately WITHOUT wa
         let userError: string;
         if (response.status === 401) {
           userError = "The Hugging Face API key is invalid. The server admin should check it in the admin panel.";
+        } else if (response.status === 402) {
+          userError = "Your Hugging Face account has run out of monthly inference credits. Add pre-paid credits or upgrade to HF PRO at huggingface.co/settings/billing.";
         } else if (response.status === 429) {
           userError = "The AI assistant is rate-limited. Please wait a moment and try again.";
         } else if (response.status === 503) {
