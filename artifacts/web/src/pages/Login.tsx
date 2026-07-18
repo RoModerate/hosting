@@ -16,14 +16,10 @@ type RedeemFormValues = z.infer<typeof redeemSchema>;
 
 const DISCORD_INVITE = 'https://discord.gg/4wEKPrgZmD';
 
-function getErrorMessage(code: string | null, discordId?: string | null, discordUser?: string | null): string | null {
+function getErrorMessage(code: string | null): string | null {
   if (!code) return null;
-  if (code === 'no_ticket') {
-    const who = discordUser ? `@${discordUser}` : 'your account';
-    const idNote = discordId ? ` (Discord ID: ${discordId})` : '';
-    return `No hosting access found for ${who}${idNote}. Share this ID with staff to get linked.`;
-  }
   const map: Record<string, string> = {
+    no_ticket: 'No hosting access found for your Discord account. Contact staff to get a key.',
     discord_denied: 'Discord authorization was cancelled.',
     oauth_failed: 'Discord authentication failed. Please try again.',
     no_access: 'No hosting access found for your Discord account. Contact staff to get a key.',
@@ -37,8 +33,6 @@ export default function Login() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const urlError = params.get('error');
-  const discordId = params.get('discord_id');
-  const discordUser = params.get('discord_user');
 
   const [mode, setMode] = useState<'discord' | 'key'>('discord');
   const [discordLoading, setDiscordLoading] = useState(false);
@@ -120,20 +114,10 @@ export default function Login() {
         </div>
 
         {/* Error from OAuth redirect */}
-        {urlError && getErrorMessage(urlError, discordId, discordUser) && (
+        {urlError && getErrorMessage(urlError) && (
           <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/20 bg-red-500/[0.07]">
             <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-xs text-red-300/70 font-mono">{getErrorMessage(urlError, discordId, discordUser)}</p>
-              {urlError === 'no_ticket' && discordId && (
-                <button
-                  onClick={() => { navigator.clipboard?.writeText(discordId); }}
-                  className="text-[10px] font-mono text-white/30 hover:text-white/60 transition-colors underline underline-offset-2"
-                >
-                  Copy Discord ID: {discordId}
-                </button>
-              )}
-            </div>
+            <p className="text-xs text-red-300/70 font-mono">{getErrorMessage(urlError)}</p>
           </div>
         )}
 

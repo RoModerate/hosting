@@ -105,12 +105,6 @@ router.post("/auth/discord/exchange", async (req, res) => {
     res.status(403).json({
       error: "no_ticket",
       message: "No hosting access was found for your Discord account. Please contact staff to get a hosting key.",
-      discord: {
-        id: discordUser.id,
-        username: discordUser.username,
-        globalName: discordUser.global_name ?? null,
-        avatar: discordUser.avatar ?? null,
-      },
     });
     return;
   }
@@ -143,12 +137,6 @@ router.post("/auth/discord/exchange", async (req, res) => {
     res.status(403).json({
       error: "key_expired",
       message: "Your hosting access has expired. Please contact staff to renew.",
-      discord: {
-        id: discordUser.id,
-        username: discordUser.username,
-        globalName: discordUser.global_name ?? null,
-        avatar: discordUser.avatar ?? null,
-      },
     });
     return;
   }
