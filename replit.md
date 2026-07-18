@@ -27,6 +27,22 @@ Both workflows start automatically:
 Install dependencies: `pnpm install`  
 Push DB schema: `pnpm --filter @workspace/db run push`
 
+## Setup status (Replit)
+
+| Step | Status |
+|---|---|
+| Dependencies installed (`pnpm install`) | ✅ Done |
+| Database schema pushed (`pnpm --filter @workspace/db run push`) | ✅ Done |
+| `PORT=8080` set in shared env | ✅ Done |
+| `SESSION_SECRET` secret | ✅ Set |
+| `DISCORD_BOT_TOKEN` env var | ✅ Set |
+| `DISCORD_GUILD_ID` env var | ✅ Set |
+| `DISCORD_STAFF_ROLE_ID` env var | ✅ Set |
+| `DISCORD_CLIENT_ID` secret | ✅ Set |
+| `DISCORD_CLIENT_SECRET` secret | ✅ Set |
+| `OPENROUTER_API_KEY` secret | ⬜ Optional — enables AI repair/explain |
+| `ADMIN_PASSWORD` secret | ⬜ Recommended — defaults to `lumora-admin` |
+
 ## Environment variables
 
 | Key | Required | Notes |
@@ -34,9 +50,9 @@ Push DB schema: `pnpm --filter @workspace/db run push`
 | `DATABASE_URL` | ✓ | Replit managed — set automatically |
 | `SESSION_SECRET` | ✓ | Secret — stored in Replit Secrets |
 | `PORT` | ✓ | `8080` for API server (shared env) |
-| `DISCORD_CLIENT_ID` | ✓ | OAuth app client ID |
+| `DISCORD_CLIENT_ID` | ✓ | OAuth app client ID — stored in Replit Secrets |
 | `DISCORD_CLIENT_SECRET` | ✓ | Secret — stored in Replit Secrets |
-| `DISCORD_BOT_TOKEN` | ✓ | Secret — stored in Replit Secrets |
+| `DISCORD_BOT_TOKEN` | ✓ | Stored in shared env (move to Secrets for production) |
 | `DISCORD_GUILD_ID` | ✓ | Target Discord server ID |
 | `DISCORD_STAFF_ROLE_ID` | ✓ | Role that can manage tickets |
 | `DISCORD_TICKET_CATEGORY_NAME` | — | Defaults to `"Tickets"` |

@@ -1,0 +1,28 @@
+Small problems and improvements needed:
+
+The Bot process crashed on restart feature says "Sending logs to AI repair..." but it does not actually send the crash logs to my AI automatically. Fix this so whenever a bot crashes, the logs are automatically collected and sent to the AI repair agent. The AI should analyze the error, explain what happened, apply fixes when possible, restart the bot, and verify if it works.
+
+Add a new AI settings area inside the File Manager where users can add their own OpenRouter API key. I do not want users using my personal API key because it costs money. Make it clear that users can use their own free/open router key. Store keys securely as secrets and never expose them.
+
+Improve the File Manager design:
+- Make the file upload button bigger and wider so it is easier to use.
+- Remove all Ticket #1 and ticket-related UI. I do not want ticket systems anymore.
+- For the secrets section, allow users to add any custom secret/environment variable they need.
+- Fix file search because currently searching for files does not work properly.
+- Add an area inside the File Manager that shows what the AI found when it scans files, including detected problems, files changed, and actions taken.
+
+Improve the AI agent:
+- If users connect their own AI key, allow them to use it as a custom coding agent.
+- The AI should be able to understand their bot files, make requested changes, edit files, fix errors, and improve the bot similar to a coding assistant.
+- Make the AI workflow automatic instead of requiring me to manually fix user problems.
+
+Dashboard improvements:
+- Add a "Return to Home" button inside the dashboard/portal.
+- Improve navigation so users can easily go back.
+
+Home page improvements:
+- The glowing effect at the top becomes blurry and glitches when screen recording. Fix the animation/rendering so it looks smooth and professional.
+- Remove the emoji next to "Discord" at the top.
+- Keep the design futuristic but professional, not overly AI-looking.
+
+Make everything smoother, cleaner, and more like a professional hosting platform.
