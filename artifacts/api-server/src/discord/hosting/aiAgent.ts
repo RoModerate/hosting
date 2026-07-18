@@ -24,8 +24,8 @@ import { buildFileTree, loadKnowledge } from "./aiRepair";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
+const HF_URL = "https://router.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
 
 /** Max tool-call rounds per agent session. Keeps latency bounded. */
 const MAX_AGENT_TURNS = 12;

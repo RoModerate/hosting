@@ -25,8 +25,8 @@ import { appendLiveLog } from "./processManager";
 
 export const MAX_REPAIR_ATTEMPTS = 3;
 
-const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
+const HF_URL = "https://router.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
 
 /**
  * Knowledge base lives at the workspace root so it is easy for operators to

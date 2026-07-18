@@ -18,8 +18,8 @@ import { execSync } from "node:child_process";
 
 const router: IRouter = Router();
 
-const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
+const HF_URL = "https://router.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
 

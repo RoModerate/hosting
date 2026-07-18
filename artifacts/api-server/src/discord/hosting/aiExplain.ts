@@ -1,7 +1,7 @@
 import { logger } from "../../lib/logger";
 
-const HF_URL = "https://api-inference.huggingface.co/v1/chat/completions";
-const MODEL = process.env["HF_MODEL"] || "Qwen/Qwen2.5-72B-Instruct";
+const HF_URL = "https://router.huggingface.co/v1/chat/completions";
+const MODEL = process.env["HF_MODEL"] || "meta-llama/Llama-3.1-8B-Instruct";
 
 /**
  * Ask an LLM (via Hugging Face Inference API) to translate a raw hosting
