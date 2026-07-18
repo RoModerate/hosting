@@ -18,8 +18,8 @@ import { execSync } from "node:child_process";
 
 const router: IRouter = Router();
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env["GROQ_MODEL"] || "llama-3.1-8b-instant";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
 
 // ─── In-memory undo stack per ticket ─────────────────────────────────────────
 
@@ -503,13 +503,13 @@ router.post("/ai/chat", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env["GROQ_API_KEY"];
+  const apiKey = process.env["OPENROUTER_API_KEY"];
   if (!apiKey) {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "GROQ_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
     if (!row) {
-      res.status(503).json({ error: "AI assistant is not configured on this server. Set GROQ_API_KEY in the admin panel." });
+      res.status(503).json({ error: "AI assistant is not configured on this server. Set OPENROUTER_API_KEY in the admin panel." });
       return;
     }
   }
@@ -517,7 +517,7 @@ router.post("/ai/chat", async (req, res) => {
   const resolvedApiKey = apiKey || await (async () => {
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
-    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "GROQ_API_KEY"));
+    const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
     return row?.value;
   })();
 
@@ -628,11 +628,13 @@ Only trigger this when the user explicitly asks you to fix/diagnose, or when the
     let finalContent = "";
 
     for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-      const response = await fetch(GROQ_URL, {
+      const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${resolvedApiKey}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": "https://lumora.host",
+          "X-Title": "Lumora Portal AI",
         },
         body: JSON.stringify({
           model: MODEL,
@@ -646,16 +648,20 @@ Only trigger this when the user explicitly asks you to fix/diagnose, or when the
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
-        logger.error({ status: response.status, body: errText.slice(0, 400) }, "Groq AI chat failed");
+        logger.error({ status: response.status, body: errText.slice(0, 400) }, "OpenRouter AI chat failed");
 
         // Build a specific, actionable error message based on the status code.
         let userError: string;
         if (response.status === 401) {
-          userError = "The Groq API key is invalid. The server admin should check it in the admin panel.";
+          userError = "The OpenRouter API key is invalid. The server admin should check it in the admin panel.";
+        } else if (response.status === 402) {
+          const afford = errText.match(/can only afford (\d+)/i);
+          const hint = afford ? ` (balance: ~${afford[1]} tokens)` : "";
+          userError = `The OpenRouter account is out of credits${hint}. Top up at openrouter.ai/settings/credits.`;
         } else if (response.status === 429) {
-          userError = "The AI assistant has hit Groq's rate limit. Please wait a moment and try again.";
+          userError = "The AI assistant is rate-limited. Please wait a moment and try again.";
         } else if (response.status >= 500) {
-          userError = "Groq is having an outage. Please try again in a few minutes.";
+          userError = "OpenRouter is having an outage. Please try again in a few minutes.";
         } else {
           userError = `AI service error (${response.status}). Please try again shortly.`;
         }

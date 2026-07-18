@@ -12,8 +12,8 @@ const CONFIG_KEYS = [
   "DISCORD_GUILD_ID",
   "DISCORD_STAFF_ROLE_ID",
   "DISCORD_TICKET_CATEGORY_NAME",
-  "GROQ_API_KEY",
-  "GROQ_MODEL",
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_MODEL",
 ] as const;
 
 function getAdminPassword(): string {

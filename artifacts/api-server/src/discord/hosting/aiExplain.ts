@@ -1,7 +1,7 @@
 import { logger } from "../../lib/logger";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = process.env["OPENROUTER_MODEL"] || "openai/gpt-4o-mini";
 
 /**
  * Ask an LLM (via Hugging Face Inference API) to translate a raw hosting
@@ -14,10 +14,10 @@ export async function explainHostingFailure(params: {
   detail?: string;
   fileName: string;
 }): Promise<string | null> {
-  const apiKey = process.env["GROQ_API_KEY"];
+  const apiKey = process.env["OPENROUTER_API_KEY"];
   if (!apiKey) {
     logger.warn(
-      "GROQ_API_KEY not set; skipping AI failure explanation",
+      "OPENROUTER_API_KEY not set; skipping AI failure explanation",
     );
     return null;
   }
@@ -35,7 +35,7 @@ export async function explainHostingFailure(params: {
     .join("\n\n");
 
   try {
-    const response = await fetch(GROQ_URL, {
+    const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -52,7 +52,7 @@ export async function explainHostingFailure(params: {
       const text = await response.text().catch(() => "");
       logger.error(
         { status: response.status, text },
-        "Groq request failed",
+        "OpenRouter request failed",
       );
       return null;
     }
@@ -63,7 +63,7 @@ export async function explainHostingFailure(params: {
     const content = data.choices?.[0]?.message?.content?.trim();
     return content || null;
   } catch (err) {
-    logger.error({ err }, "Failed to call Groq for failure explanation");
+    logger.error({ err }, "Failed to call OpenRouter for failure explanation");
     return null;
   }
 }
