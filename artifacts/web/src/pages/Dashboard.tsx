@@ -972,7 +972,7 @@ export default function Dashboard() {
                       { k: 'Runtime', v: 'Python · Node.js · Java' },
                       { k: 'Network', v: 'Isolated' },
                       { k: 'Storage', v: 'Persistent' },
-                      { k: 'Duration', v: `${(session as any).hostingDurationDays}d` },
+                      { k: 'Duration', v: (session as any).hostingDurationDays != null ? `${(session as any).hostingDurationDays}d` : '—' },
                     ].map(({ k, v }) => (
                       <div key={k}>
                         <div className="text-[9px] font-mono text-white/20 mb-0.5">{k}</div>

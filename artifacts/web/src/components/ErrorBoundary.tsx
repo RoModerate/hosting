@@ -12,8 +12,13 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, message };
   }
 
-  componentDidCatch(error: unknown, info: unknown) {
+  componentDidCatch(error: unknown, info: { componentStack?: string }) {
     console.error('[ErrorBoundary]', error, info);
+    // Append the component stack to the message so we can see exactly where
+    this.setState(prev => ({
+      ...prev,
+      message: prev.message + (info?.componentStack ? '\n\nComponent stack:' + info.componentStack : ''),
+    }));
   }
 
   render() {
