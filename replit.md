@@ -1,72 +1,56 @@
 # Lumora Portal
 
-A Discord bot hosting and management platform. Users upload Discord bots (Node.js or Python), and Lumora keeps them online 24/7 with auto-repair, file management, and a support ticket system.
+A Discord bot hosting platform. Users upload bot source code via a web dashboard, monitor execution, and benefit from automated process management and AI-powered crash repair.
 
 ## Architecture
 
 pnpm monorepo with three artifacts:
 
-| Artifact | Port | Purpose |
+| Artifact | Port | Path |
 |---|---|---|
-| `artifacts/api-server` | 8080 | Express v5 REST API + Discord bot |
-| `artifacts/web` | 22333 | React 19 + Vite frontend |
-| `artifacts/mockup-sandbox` | — | UI component design sandbox |
+| `artifacts/web` | 22333 | `/` — React + Vite frontend |
+| `artifacts/api-server` | 8080 | `/api` — Express.js API + Discord bot |
+| `artifacts/mockup-sandbox` | 8081 | `/__mockup` — Vite design sandbox |
 
 Shared libraries in `lib/`:
-- `lib/db` — Drizzle ORM schema + PostgreSQL client (Replit managed DB)
+- `lib/db` — PostgreSQL schema (Drizzle ORM)
+- `lib/api-client-react` — Generated React Query hooks (orval)
 - `lib/api-spec` — OpenAPI spec
-- `lib/api-zod` — Zod validators generated from spec
-- `lib/api-client-react` — TanStack Query hooks generated from spec
+- `lib/api-zod` — Zod validators
 
 ## How to run
 
 Both workflows start automatically:
-- **API Server**: `pnpm --filter @workspace/api-server run dev` (builds with esbuild, then runs)
-- **Web**: `pnpm --filter @workspace/web run dev` (Vite dev server)
+- **Lumora Portal** (`artifacts/web: web`) — Vite dev server on port 22333
+- **API Server** (`artifacts/api-server: API Server`) — Express + Discord bot on port 8080
 
-Install dependencies: `pnpm install`  
-Push DB schema: `pnpm --filter @workspace/db run push`
+Replit's proxy routes `/api/*` to the API server and everything else to the web app.
 
-## Setup status (Replit)
+## Environment setup
 
-| Step | Status |
-|---|---|
-| Dependencies installed (`pnpm install`) | ✅ Done |
-| Database schema pushed (`pnpm --filter @workspace/db run push`) | ✅ Done |
-| `PORT=8080` set in shared env | ✅ Done |
-| `SESSION_SECRET` secret | ✅ Set |
-| `DISCORD_BOT_TOKEN` env var | ✅ Set |
-| `DISCORD_GUILD_ID` env var | ✅ Set |
-| `DISCORD_STAFF_ROLE_ID` env var | ✅ Set |
-| `DISCORD_CLIENT_ID` secret | ✅ Set |
-| `DISCORD_CLIENT_SECRET` secret | ✅ Set |
-| `OPENROUTER_API_KEY` secret | ⬜ Optional — enables AI repair/explain |
-| `ADMIN_PASSWORD` secret | ⬜ Recommended — defaults to `lumora-admin` |
+All required secrets are configured as Replit Secrets:
+- `SESSION_SECRET` — signs session cookies
+- `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` — Discord OAuth
+- `DISCORD_GUILD_ID` / `DISCORD_STAFF_ROLE_ID` — bot guild config
+- `OPENROUTER_API_KEY` — AI auto-repair feature
+- `DISCORD_BOT_TOKEN` — set in shared env vars (non-secret)
 
-## Environment variables
+`DATABASE_URL` is runtime-managed by Replit (PostgreSQL already provisioned).
 
-| Key | Required | Notes |
-|---|---|---|
-| `DATABASE_URL` | ✓ | Replit managed — set automatically |
-| `SESSION_SECRET` | ✓ | Secret — stored in Replit Secrets |
-| `PORT` | ✓ | `8080` for API server (shared env) |
-| `DISCORD_CLIENT_ID` | ✓ | OAuth app client ID — stored in Replit Secrets |
-| `DISCORD_CLIENT_SECRET` | ✓ | Secret — stored in Replit Secrets |
-| `DISCORD_BOT_TOKEN` | ✓ | Stored in shared env (move to Secrets for production) |
-| `DISCORD_GUILD_ID` | ✓ | Target Discord server ID |
-| `DISCORD_STAFF_ROLE_ID` | ✓ | Role that can manage tickets |
-| `DISCORD_TICKET_CATEGORY_NAME` | — | Defaults to `"Tickets"` |
-| `OPENROUTER_API_KEY` | — | Secret — enables AI repair/explain features |
-| `OPENROUTER_MODEL` | — | Defaults to `openai/gpt-4o-mini` |
-| `ADMIN_PASSWORD` | — | Defaults to `lumora-admin` — **change in production** |
+## Database migrations
 
-## Tech stack
+```bash
+pnpm --filter @workspace/db run push
+```
 
-- **Frontend**: React 19, Vite, Tailwind CSS v4, Wouter, TanStack Query, Radix UI / shadcn, CodeMirror
-- **Backend**: Express v5, Node.js ESM, Discord.js v14, Drizzle ORM, Pino logging
-- **Database**: PostgreSQL (Replit managed)
-- **Tooling**: TypeScript, Zod, Orval (API client codegen), esbuild
+## Key features
+
+- Discord OAuth login + access key authentication
+- Admin panel (`/admin`) — password protected (env: `ADMIN_PASSWORD`, default: `lumora-admin`)
+- Per-user bot file manager with CodeMirror editor
+- AI crash repair via OpenRouter (automatic on crash, up to 3 attempts)
+- Bot process sandboxing in `artifacts/api-server/storage/bots/`
 
 ## User preferences
 
-- Keep the existing monorepo structure intact
+<!-- User preferences go here -->
