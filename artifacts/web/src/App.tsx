@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import NotFound from '@/pages/not-found';
 import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
@@ -29,16 +30,18 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider forcedTheme="dark" defaultTheme="dark" storageKey="lumora-theme">
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider forcedTheme="dark" defaultTheme="dark" storageKey="lumora-theme">
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
