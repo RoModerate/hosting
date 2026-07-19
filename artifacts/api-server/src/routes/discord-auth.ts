@@ -4,11 +4,103 @@ import { db, ticketsTable, hostingKeysTable } from "@workspace/db";
 import { issueSessionCookieWithDiscord } from "../lib/session";
 import { logger } from "../lib/logger";
 import { getHostedBotStatus } from "../discord/hosting/runner";
+import crypto from "crypto";
 
 const router = Router();
 
 const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"] ?? "";
 const DISCORD_CLIENT_SECRET = process.env["DISCORD_CLIENT_SECRET"] ?? "";
+const DISCORD_BOT_TOKEN = process.env["DISCORD_BOT_TOKEN"] ?? "";
+const DISCORD_GUILD_ID = process.env["DISCORD_GUILD_ID"] ?? "";
+const DISCORD_STAFF_ROLE_ID = process.env["DISCORD_STAFF_ROLE_ID"] ?? "";
+
+/**
+ * Check whether a Discord user has the staff role in the guild using the bot
+ * token. Returns false on any error so it never blocks login attempts.
+ */
+async function isStaffMember(discordUserId: string): Promise<boolean> {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID || !DISCORD_STAFF_ROLE_ID) {
+    return false;
+  }
+  try {
+    const res = await fetch(
+      `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}`,
+      { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } },
+    );
+    if (!res.ok) return false;
+    const member = await res.json() as { roles: string[] };
+    return member.roles.includes(DISCORD_STAFF_ROLE_ID);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find or auto-provision a ticket + active key for a staff member so they can
+ * always log in without going through the admin panel first.
+ */
+async function getOrCreateStaffAccess(discordUser: {
+  id: string;
+  username: string;
+  global_name?: string | null;
+}): Promise<{ ticket: typeof ticketsTable.$inferSelect; key: typeof hostingKeysTable.$inferSelect }> {
+  // Use a stable synthetic channel ID so we can find/create the ticket
+  const syntheticChannelId = `staff-${discordUser.id}`;
+
+  const [existingTicket] = await db
+    .select()
+    .from(ticketsTable)
+    .where(eq(ticketsTable.channelId, syntheticChannelId));
+
+  let ticket = existingTicket;
+
+  if (!ticket) {
+    const [created] = await db
+      .insert(ticketsTable)
+      .values({
+        guildId: DISCORD_GUILD_ID,
+        channelId: syntheticChannelId,
+        ownerId: discordUser.id,
+        ownerUsername: discordUser.username,
+        status: "open",
+      })
+      .returning();
+    ticket = created;
+    logger.info({ discordId: discordUser.id }, "Auto-provisioned staff ticket");
+  }
+
+  // Find an existing active key for this ticket
+  const keys = await db
+    .select()
+    .from(hostingKeysTable)
+    .where(eq(hostingKeysTable.ticketId, ticket.id));
+
+  const activeKey = keys.find(
+    (k) => k.status === "active" && k.expiresAt && k.expiresAt.getTime() > Date.now(),
+  );
+
+  if (activeKey) return { ticket, key: activeKey };
+
+  // Create a long-lived key (10 years) for staff
+  const expiresAt = new Date();
+  expiresAt.setFullYear(expiresAt.getFullYear() + 10);
+
+  const [newKey] = await db
+    .insert(hostingKeysTable)
+    .values({
+      key: crypto.randomBytes(16).toString("hex"),
+      ticketId: ticket.id,
+      hostingDurationDays: 3650,
+      status: "active",
+      createdByDiscordId: discordUser.id,
+      redeemedAt: new Date(),
+      expiresAt,
+    })
+    .returning();
+
+  logger.info({ discordId: discordUser.id }, "Auto-provisioned staff hosting key");
+  return { ticket, key: newKey };
+}
 
 // GET /api/auth/discord/url — frontend calls this to get the OAuth redirect URL
 router.get("/auth/discord/url", (req, res) => {
@@ -95,50 +187,65 @@ router.post("/auth/discord/exchange", async (req, res) => {
     return;
   }
 
-  // Find tickets owned by this Discord user
-  const tickets = await db
-    .select()
-    .from(ticketsTable)
-    .where(eq(ticketsTable.ownerId, discordUser.id));
+  // Staff members (those with the designated staff role) always get in — their
+  // ticket and key are auto-provisioned on first login.
+  const staff = await isStaffMember(discordUser.id);
 
-  if (tickets.length === 0) {
-    res.status(403).json({
-      error: "no_ticket",
-      message: "No hosting access was found for your Discord account. Please contact staff to get a hosting key.",
-    });
-    return;
-  }
+  let activeKey: typeof hostingKeysTable.$inferSelect;
+  let matchedTicket: typeof ticketsTable.$inferSelect;
 
-  // Find an active key for any of the user's tickets
-  let activeKey = null;
-  let matchedTicket = null;
-
-  for (const ticket of tickets) {
-    const keys = await db
+  if (staff) {
+    const provisioned = await getOrCreateStaffAccess(discordUser);
+    activeKey = provisioned.key;
+    matchedTicket = provisioned.ticket;
+  } else {
+    // Regular users: find an existing ticket + active key
+    const tickets = await db
       .select()
-      .from(hostingKeysTable)
-      .where(eq(hostingKeysTable.ticketId, ticket.id));
+      .from(ticketsTable)
+      .where(eq(ticketsTable.ownerId, discordUser.id));
 
-    const active = keys.find(
-      (k) =>
-        k.status === "active" &&
-        k.expiresAt &&
-        k.expiresAt.getTime() > Date.now(),
-    );
-
-    if (active) {
-      activeKey = active;
-      matchedTicket = ticket;
-      break;
+    if (tickets.length === 0) {
+      res.status(403).json({
+        error: "no_ticket",
+        message: "No hosting access was found for your Discord account. Please contact staff to get a hosting key.",
+      });
+      return;
     }
-  }
 
-  if (!activeKey || !matchedTicket) {
-    res.status(403).json({
-      error: "key_expired",
-      message: "Your hosting access has expired. Please contact staff to renew.",
-    });
-    return;
+    let foundKey = null;
+    let foundTicket = null;
+
+    for (const ticket of tickets) {
+      const keys = await db
+        .select()
+        .from(hostingKeysTable)
+        .where(eq(hostingKeysTable.ticketId, ticket.id));
+
+      const active = keys.find(
+        (k) =>
+          k.status === "active" &&
+          k.expiresAt &&
+          k.expiresAt.getTime() > Date.now(),
+      );
+
+      if (active) {
+        foundKey = active;
+        foundTicket = ticket;
+        break;
+      }
+    }
+
+    if (!foundKey || !foundTicket) {
+      res.status(403).json({
+        error: "key_expired",
+        message: "Your hosting access has expired. Please contact staff to renew.",
+      });
+      return;
+    }
+
+    activeKey = foundKey;
+    matchedTicket = foundTicket;
   }
 
   const discordProfile = {
