@@ -14,8 +14,8 @@ import {
   Activity, Zap, XCircle, Loader2, Key, Plus, Trash2, Save,
   Eye, EyeOff, Files, PowerOff, Upload, Clock, Send, Bot,
   LogOut, User, ChevronRight, Copy, Download, X, Search, Pause, Play,
+  LayoutDashboard,
 } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import FileManager from '@/components/FileManager';
 
@@ -168,7 +168,7 @@ function ProfileDropdown({ session }: { session: any }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.10] transition-all duration-200"
+        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-200"
       >
         <div className="h-6 w-6 rounded-lg overflow-hidden bg-[#6366f1]/20 border border-white/[0.08] flex items-center justify-center shrink-0">
           {discord ? (
@@ -177,13 +177,12 @@ function ProfileDropdown({ session }: { session: any }) {
             <User className="h-3.5 w-3.5 text-white/40" />
           )}
         </div>
-        <span className="text-xs font-medium text-white/60 max-w-[100px] truncate hidden sm:block">{displayName}</span>
+        <span className="text-xs font-mono font-medium text-white/60 max-w-[100px] truncate hidden sm:block">{displayName}</span>
         <ChevronRight className={`h-3 w-3 text-white/25 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
       </button>
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-white/[0.08] bg-[#0f0f1e] shadow-2xl shadow-black/60 overflow-hidden z-50 animate-page-in">
-          {/* User info */}
           <div className="px-4 py-3.5 border-b border-white/[0.06]">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl overflow-hidden bg-[#6366f1]/20 border border-white/[0.08] flex items-center justify-center shrink-0">
@@ -200,7 +199,6 @@ function ProfileDropdown({ session }: { session: any }) {
             </div>
           </div>
 
-          {/* Session info */}
           <div className="px-4 py-2.5 border-b border-white/[0.06]">
             <div className="flex items-center justify-between text-[11px] font-mono mt-1">
               <span className="text-white/30">Expires</span>
@@ -210,7 +208,6 @@ function ProfileDropdown({ session }: { session: any }) {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="p-1.5">
             <button
               onClick={handleLogout}
@@ -283,7 +280,6 @@ function LiveConsole({ hasBot }: { hasBot: boolean }) {
     ? log.split('\n').filter(l => l.toLowerCase().includes(searchQuery.toLowerCase())).join('\n')
     : log;
 
-  // Color log lines
   const colorLine = (line: string) => {
     if (/\b(error|err|fatal|fail|exception)\b/i.test(line)) return 'text-red-400/80';
     if (/\b(warn|warning)\b/i.test(line)) return 'text-yellow-400/80';
@@ -296,7 +292,7 @@ function LiveConsole({ hasBot }: { hasBot: boolean }) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
         <div className="h-10 w-10 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
-          <Terminal className="h-4.5 w-4.5 text-white/20" />
+          <Terminal className="h-4 w-4 text-white/20" />
         </div>
         <p className="text-xs font-mono text-white/25">Deploy a bot to see console output</p>
       </div>
@@ -305,7 +301,6 @@ function LiveConsole({ hasBot }: { hasBot: boolean }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Console toolbar */}
       <div className="shrink-0 flex items-center gap-1 px-3 py-2 border-b border-white/[0.05]">
         {showSearch && (
           <div className="flex-1 flex items-center gap-2 bg-white/[0.04] rounded-lg px-2.5 py-1.5 border border-white/[0.07]">
@@ -327,11 +322,7 @@ function LiveConsole({ hasBot }: { hasBot: boolean }) {
 
         {!showSearch && (
           <>
-            <button
-              onClick={() => setShowSearch(true)}
-              className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all"
-              title="Search logs"
-            >
+            <button onClick={() => setShowSearch(true)} className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all" title="Search logs">
               <Search className="h-3.5 w-3.5" />
             </button>
             <button
@@ -341,50 +332,31 @@ function LiveConsole({ hasBot }: { hasBot: boolean }) {
             >
               {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
             </button>
-            <button
-              onClick={handleCopy}
-              className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all"
-              title="Copy logs"
-            >
+            <button onClick={handleCopy} className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all" title="Copy logs">
               <Copy className="h-3.5 w-3.5" />
             </button>
-            <button
-              onClick={handleDownload}
-              className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all"
-              title="Download logs"
-            >
+            <button onClick={handleDownload} className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all" title="Download logs">
               <Download className="h-3.5 w-3.5" />
             </button>
-            <button
-              onClick={() => setLog('')}
-              className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all"
-              title="Clear display"
-            >
+            <button onClick={() => setLog('')} className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.04] transition-all" title="Clear display">
               <X className="h-3.5 w-3.5" />
             </button>
           </>
         )}
         {showSearch && (
-          <button
-            onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-            className="p-1.5 rounded-lg text-white/25 hover:text-white/60 transition-all ml-1"
-          >
+          <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} className="p-1.5 rounded-lg text-white/25 hover:text-white/60 transition-all ml-1">
             <X className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {/* Log content */}
       {!log ? (
         <div className="flex-1 flex items-center justify-center gap-2">
           <Loader2 className="h-3.5 w-3.5 text-white/20 animate-spin" />
           <p className="text-xs font-mono text-white/20">Waiting for output…</p>
         </div>
       ) : (
-        <div
-          className="flex-1 overflow-y-auto p-3 space-y-0.5"
-          onScroll={handleScroll}
-        >
+        <div className="flex-1 overflow-y-auto p-3 space-y-0.5" onScroll={handleScroll}>
           {filteredLog.split('\n').map((line, i) => (
             line ? (
               <div key={i} className={`font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap break-words ${colorLine(line)}`}>
@@ -533,6 +505,39 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
   );
 }
 
+// ─── Sidebar Nav Item ─────────────────────────────────────────────────────────
+function SideNavItem({
+  icon: Icon, label, active, onClick, badge,
+}: {
+  icon: React.ElementType;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  badge?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200 group relative ${
+        active
+          ? 'bg-[#6366f1]/10 border border-[#6366f1]/20 text-white'
+          : 'text-white/35 hover:text-white/70 hover:bg-white/[0.04] border border-transparent'
+      }`}
+    >
+      {active && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full bg-[#6366f1]" />
+      )}
+      <Icon className={`h-4 w-4 shrink-0 transition-colors ${active ? 'text-[#6366f1]' : 'text-white/30 group-hover:text-white/55'}`} />
+      <span className="text-xs font-mono font-medium tracking-wide">{label}</span>
+      {badge && (
+        <span className="ml-auto text-[9px] font-mono text-[#6366f1]/60 bg-[#6366f1]/10 border border-[#6366f1]/15 rounded px-1.5 py-0.5">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -540,7 +545,7 @@ export default function Dashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [removingBot, setRemovingBot] = useState(false);
-  const [rightTab, setRightTab] = useState<'console' | 'ai'>('console');
+  const [activeTab, setActiveTab] = useState<'overview' | 'console' | 'files' | 'secrets' | 'ai'>('overview');
 
   // Env vars
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>([]);
@@ -552,7 +557,7 @@ export default function Dashboard() {
     query: {
       queryKey: getGetSessionQueryKey(),
       retry: false,
-      refetchInterval: (query) => {
+      refetchInterval: (query: any) => {
         const s = (query.state.data as any)?.hostedBot?.status;
         if (s === 'installing' || s === 'starting' || s === 'connecting') return 2000;
         return false;
@@ -581,7 +586,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const status = (session as any)?.hostedBot?.status;
-    if (status === 'crashed' || status === 'error') setRightTab('ai');
+    if (status === 'crashed' || status === 'error') setActiveTab('ai');
   }, [(session as any)?.hostedBot?.status]);
 
   const handleAddEnvRow = () => { setEnvEntries((prev) => [...prev, { key: '', value: '', hidden: false }]); setEnvDirty(true); };
@@ -677,7 +682,6 @@ export default function Dashboard() {
 
   const { hostedBot } = session;
   const isProcessing = hostedBot?.status === 'installing' || hostedBot?.status === 'starting' || hostedBot?.status === 'connecting';
-  // Stop is always available so users can escape a stuck loop — never gate it on isProcessing.
   const isBusy = restartBot.isPending || stopBot.isPending || isProcessing || removingBot;
   const canStop = !stopBot.isPending && hostedBot?.status !== 'stopped';
 
@@ -688,9 +692,24 @@ export default function Dashboard() {
     } catch { return '—'; }
   })();
 
+  const sideNavItems: Array<{ id: typeof activeTab; icon: React.ElementType; label: string; badge?: string }> = [
+    { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
+    { id: 'console', icon: Terminal, label: 'Console' },
+    { id: 'files', icon: Files, label: 'Files' },
+    { id: 'secrets', icon: Key, label: 'Secrets', badge: envEntries.length > 0 ? String(envEntries.length) : undefined },
+    { id: 'ai', icon: Zap, label: 'AI Agent' },
+  ];
+
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="h-screen w-full bg-[#080810] text-[#c8cde8] flex flex-col overflow-hidden animate-page-in">
+      {/* Subtle grid */}
+      <div className="fixed inset-0 pointer-events-none opacity-[0.018]"
+        style={{
+          backgroundImage: `linear-gradient(rgba(99,102,241,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.8) 1px, transparent 1px)`,
+          backgroundSize: '48px 48px',
+        }}
+      />
 
       {showCreateModal && (
         <CreateBotModal
@@ -703,22 +722,26 @@ export default function Dashboard() {
       )}
 
       {/* ─── Top bar ──────────────────────────────────────────────────────── */}
-      <header className="shrink-0 flex items-center justify-between h-13 px-5 border-b border-white/[0.05] bg-[#080810]/95 backdrop-blur-xl">
+      <header className="relative shrink-0 flex items-center justify-between h-13 px-5 border-b border-white/[0.06] bg-[#080810]/95 backdrop-blur-xl z-20">
+        {/* Top accent */}
+        <div className="absolute top-0 left-0 right-0 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.25), transparent)' }}
+        />
         <div className="flex items-center gap-3">
           <img src="/lumora-brand.png" alt="Lumora" className="h-7 w-7 object-contain" />
-          <span className="font-mono font-bold text-sm tracking-[0.15em] text-white">LUMORA</span>
+          <span className="font-mono font-black text-sm tracking-[0.18em] text-white">LUMORA</span>
           <span className="h-3.5 w-px bg-white/[0.08] mx-1" />
-          <span className="text-xs font-mono text-white/30 hidden sm:block">Portal</span>
+          <span className="text-xs font-mono text-white/25 hidden sm:block">Control Room</span>
           <button
             onClick={() => setLocation('/')}
-            className="hidden sm:flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-lg border border-white/[0.06] text-[11px] font-mono text-white/25 hover:text-white/55 hover:border-white/[0.12] hover:bg-white/[0.03] transition-all duration-200"
+            className="hidden sm:flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-lg border border-white/[0.06] text-[11px] font-mono text-white/22 hover:text-white/50 hover:border-white/[0.12] hover:bg-white/[0.03] transition-all duration-200"
           >
             ← Home
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-white/25 border border-white/[0.05] rounded-lg px-2.5 py-1">
+          <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-white/22 border border-white/[0.05] rounded-lg px-2.5 py-1">
             <Clock className="h-3 w-3" />
             <span>Expires {expiryStr}</span>
           </div>
@@ -729,154 +752,177 @@ export default function Dashboard() {
       {/* ─── Body ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
+        {/* ─── Left Sidebar ──────────────────────────────────────────────── */}
+        <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-white/[0.06] bg-[#09091a] py-4 px-2 gap-1">
+          {/* Bot status pill in sidebar */}
+          {hostedBot && (
+            <div className="mb-3 px-2">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Activity className="h-3 w-3 text-white/25 shrink-0" />
+                  <span className="font-mono text-[10px] text-white/30 tracking-wider truncate">{hostedBot.fileName || 'No bot'}</span>
+                </div>
+                <StatusBadge status={hostedBot.status} />
+              </div>
+            </div>
+          )}
+
+          {sideNavItems.map(({ id, icon, label, badge }) => (
+            <SideNavItem
+              key={id}
+              icon={icon}
+              label={label}
+              active={activeTab === id}
+              onClick={() => setActiveTab(id)}
+              badge={badge}
+            />
+          ))}
+
+          {/* Bottom actions */}
+          <div className="mt-auto pt-4 border-t border-white/[0.05] space-y-1 px-1">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              disabled={isBusy}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-mono text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.06] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Upload className="h-3.5 w-3.5 shrink-0" />
+              {hostedBot ? 'Replace Bot' : 'Deploy Bot'}
+            </button>
+          </div>
+        </aside>
+
         {/* ─── Main content ──────────────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-5 py-6 space-y-5">
+          <div className="max-w-3xl mx-auto px-5 py-6 space-y-5">
 
-            {/* Bot panel */}
-            {hostedBot && hostedBot.fileName ? (
-              <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d18] overflow-hidden">
-                {/* Bot header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
-                  <div className="flex items-center gap-3.5">
-                    <div className="h-9 w-9 rounded-xl border border-white/[0.07] bg-[#6366f1]/[0.08] flex items-center justify-center shrink-0">
-                      <Activity className="h-4 w-4 text-[#6366f1]/60" />
-                    </div>
-                    <div>
-                      <div className="font-mono font-semibold text-sm text-white/85">{hostedBot.fileName}</div>
-                      <div className="text-[11px] text-white/28 mt-0.5">
-                        {hostedBot.lastStartedAt
-                          ? `Started ${formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true })}`
-                          : 'Not started yet'}
+            {/* ── Overview Tab ─────────────────────────────────────────── */}
+            {activeTab === 'overview' && (
+              <div className="space-y-5">
+                {/* Bot card or deploy prompt */}
+                {hostedBot && hostedBot.fileName ? (
+                  <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d1a] overflow-hidden">
+                    {/* Top accent */}
+                    <div className="h-px w-full"
+                      style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent)' }}
+                    />
+                    {/* Bot header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
+                      <div className="flex items-center gap-3.5">
+                        <div className="h-10 w-10 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/[0.08] flex items-center justify-center shrink-0">
+                          <Activity className="h-4.5 w-4.5 text-[#6366f1]/60" />
+                        </div>
+                        <div>
+                          <div className="font-mono font-bold text-sm text-white/90">{hostedBot.fileName}</div>
+                          <div className="text-[11px] text-white/28 mt-0.5 font-mono">
+                            {hostedBot.lastStartedAt
+                              ? `Started ${formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true })}`
+                              : 'Not started yet'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <StatusBadge status={hostedBot.status} />
+                        {(hostedBot as any).botName && (hostedBot.status === 'online' || hostedBot.status === 'running') && (
+                          <span className="text-[9px] font-mono text-emerald-400/50 whitespace-nowrap">
+                            {(hostedBot as any).botName}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <StatusBadge status={hostedBot.status} />
-                    {(hostedBot as any).botName && (hostedBot.status === 'online' || hostedBot.status === 'running') && (
-                      <span className="text-[9px] font-mono text-emerald-400/50 whitespace-nowrap">
-                        {(hostedBot as any).botName}
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-3 divide-x divide-white/[0.04] border-b border-white/[0.04]">
-                  {[
-                    { label: 'Restarts', value: String(hostedBot.restartCount) },
-                    { label: 'Started', value: hostedBot.lastStartedAt ? formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true }) : '—' },
-                    { label: 'Command', value: hostedBot.startCommand || '—' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="px-5 py-3">
-                      <div className="text-[9px] font-mono text-white/22 tracking-wider mb-1">{label.toUpperCase()}</div>
-                      <div className="font-mono text-xs text-white/60 truncate" title={value}>{value}</div>
+                    {/* Stat cards */}
+                    <div className="grid grid-cols-3 divide-x divide-white/[0.04] border-b border-white/[0.04]">
+                      {[
+                        { label: 'Restarts', value: String(hostedBot.restartCount) },
+                        { label: 'Started', value: hostedBot.lastStartedAt ? formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true }) : '—' },
+                        { label: 'Command', value: hostedBot.startCommand || '—' },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="px-5 py-3.5">
+                          <div className="text-[9px] font-mono text-white/22 tracking-widest mb-1.5">{label.toUpperCase()}</div>
+                          <div className="font-mono text-xs text-white/60 truncate" title={value}>{value}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* Deployment stages progress */}
-                {(isProcessing || hostedBot.status === 'online' || hostedBot.status === 'running' || hostedBot.status === 'login_failed') && (
-                  <DeploymentStages
-                    status={hostedBot.status}
-                    botName={(hostedBot as any).botName}
-                  />
-                )}
+                    {/* Deployment stages */}
+                    {(isProcessing || hostedBot.status === 'online' || hostedBot.status === 'running' || hostedBot.status === 'login_failed') && (
+                      <DeploymentStages status={hostedBot.status} botName={(hostedBot as any).botName} />
+                    )}
 
-                {/* Processing status message while busy */}
-                {isProcessing && hostedBot.errorMessage && (
-                  <div className="px-5 py-2.5 border-b border-blue-500/10 flex items-center gap-2.5 bg-blue-500/[0.04]">
-                    <Loader2 className="h-3 w-3 text-blue-400 animate-spin shrink-0" />
-                    <span className="text-xs font-mono text-blue-400/80 truncate">{hostedBot.errorMessage}</span>
+                    {/* Processing message */}
+                    {isProcessing && hostedBot.errorMessage && (
+                      <div className="px-5 py-2.5 border-b border-blue-500/10 flex items-center gap-2.5 bg-blue-500/[0.04]">
+                        <Loader2 className="h-3 w-3 text-blue-400 animate-spin shrink-0" />
+                        <span className="text-xs font-mono text-blue-400/80 truncate">{hostedBot.errorMessage}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="px-5 py-3.5 flex flex-wrap items-center gap-2">
+                      {hostedBot.status === 'stopped' ? (
+                        <button
+                          onClick={handleRestart}
+                          disabled={restartBot.isPending || stopBot.isPending || removingBot}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-emerald-500/30 text-xs font-mono text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/[0.08] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Play className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-pulse' : ''}`} />
+                          {restartBot.isPending ? 'Starting…' : 'Run'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleRestart}
+                          disabled={isBusy}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <RotateCw className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-spin' : ''}`} />
+                          {restartBot.isPending ? 'Restarting…' : 'Restart'}
+                        </button>
+                      )}
+                      <button
+                        onClick={handleStop}
+                        disabled={!canStop}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <PowerOff className="h-3.5 w-3.5" />
+                        {stopBot.isPending ? 'Stopping…' : 'Stop'}
+                      </button>
+                      <button
+                        onClick={() => setShowCreateModal(true)}
+                        disabled={isBusy}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Replace
+                      </button>
+                      <button
+                        onClick={handleRemoveBot}
+                        disabled={isBusy}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-red-500/15 text-xs font-mono text-red-400/45 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/[0.05] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ml-auto"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {removingBot ? 'Removing…' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-2xl border-2 border-dashed border-white/[0.06] hover:border-[#6366f1]/30 transition-all duration-300 p-14 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#6366f1]/[0.02] group"
+                    onClick={() => setShowCreateModal(true)}
+                  >
+                    <div className="h-14 w-14 rounded-2xl border border-white/[0.07] bg-white/[0.02] group-hover:bg-[#6366f1]/[0.08] group-hover:border-[#6366f1]/20 flex items-center justify-center mb-4 transition-all duration-300">
+                      <Plus className="h-6 w-6 text-white/20 group-hover:text-[#6366f1]/60 transition-colors duration-300" />
+                    </div>
+                    <h3 className="font-mono font-bold text-sm text-white/40 mb-1.5">No bot deployed</h3>
+                    <p className="text-xs text-white/22 font-mono">Click to deploy — ZIP upload or GitHub import</p>
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="px-5 py-3.5 flex flex-wrap items-center gap-2">
-                  {hostedBot.status === 'stopped' ? (
-                    <button
-                      onClick={handleRestart}
-                      disabled={restartBot.isPending || stopBot.isPending || removingBot}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 text-xs font-mono text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/[0.08] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <Play className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-pulse' : ''}`} />
-                      {restartBot.isPending ? 'Starting…' : 'Run'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleRestart}
-                      disabled={isBusy}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <RotateCw className={`h-3.5 w-3.5 ${restartBot.isPending ? 'animate-spin' : ''}`} />
-                      {restartBot.isPending ? 'Restarting…' : 'Restart'}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStop}
-                    disabled={!canStop}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <PowerOff className="h-3.5 w-3.5" />
-                    {stopBot.isPending ? 'Stopping…' : 'Stop'}
-                  </button>
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    disabled={isBusy}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/45 hover:text-white/75 hover:border-white/[0.14] hover:bg-white/[0.03] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    Replace
-                  </button>
-                  <button
-                    onClick={handleRemoveBot}
-                    disabled={isBusy}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/15 text-xs font-mono text-red-400/45 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/[0.05] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ml-auto"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {removingBot ? 'Removing…' : 'Remove'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                className="rounded-2xl border-2 border-dashed border-white/[0.06] hover:border-[#6366f1]/30 transition-all duration-300 p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#6366f1]/[0.02] group"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <div className="h-12 w-12 rounded-2xl border border-white/[0.07] bg-white/[0.02] group-hover:bg-[#6366f1]/[0.08] group-hover:border-[#6366f1]/20 flex items-center justify-center mb-4 transition-all duration-300">
-                  <Plus className="h-5 w-5 text-white/20 group-hover:text-[#6366f1]/60 transition-colors duration-300" />
-                </div>
-                <h3 className="font-mono font-semibold text-sm text-white/40 mb-1.5">No bot deployed</h3>
-                <p className="text-xs text-white/22 font-mono">Click to deploy — ZIP upload or GitHub import</p>
-              </div>
-            )}
-
-            {/* ─── Tabs ─────────────────────────────────────────────────── */}
-            <Tabs defaultValue="overview" className="space-y-4">
-              <TabsList className="h-9 bg-white/[0.02] border border-white/[0.05] gap-0.5 p-1 rounded-xl">
-                {[
-                  { value: 'overview', icon: Activity, label: 'Overview' },
-                  { value: 'files', icon: Files, label: 'Files' },
-                  { value: 'secrets', icon: Key, label: 'Secrets' },
-                ].map(({ value, icon: Icon, label }) => (
-                  <TabsTrigger
-                    key={value}
-                    value={value}
-                    className="flex items-center gap-1.5 text-xs font-mono h-7 px-3.5 text-white/30 data-[state=active]:bg-white/[0.07] data-[state=active]:text-white/75 data-[state=active]:shadow-none rounded-lg transition-all duration-200"
-                  >
-                    <Icon className="h-3 w-3" />
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {/* Overview */}
-              <TabsContent value="overview" className="mt-0 space-y-3">
+                {/* AI repair notice */}
                 {hostedBot && (hostedBot as any).repairAttempts > 0 && (hostedBot.status === 'crashed' || hostedBot.status === 'error') && (
-                  <div className="rounded-xl border border-white/[0.06] bg-[#0d0d18] p-4">
+                  <div className="rounded-xl border border-[#6366f1]/15 bg-[#6366f1]/[0.05] p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Zap className="h-3.5 w-3.5 text-[#6366f1]" />
-                      <span className="font-mono text-xs text-white/55 font-semibold tracking-wider">AI AUTO-REPAIR</span>
+                      <span className="font-mono text-xs text-white/55 font-bold tracking-wider">AI AUTO-REPAIR</span>
                       <span className="ml-auto font-mono text-[10px] text-white/25 border border-white/[0.06] rounded-md px-1.5 py-0.5">
                         {(hostedBot as any).repairAttempts}/3 attempts
                       </span>
@@ -887,11 +933,12 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {/* AI explanation */}
                 {hostedBot?.aiExplanation && (
-                  <div className="rounded-xl border border-white/[0.06] bg-[#0d0d18] p-4">
+                  <div className="rounded-xl border border-white/[0.06] bg-[#0d0d1a] p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Bot className="h-3.5 w-3.5 text-white/25" />
-                      <span className="font-mono text-xs text-white/45 font-semibold tracking-wider">AI DIAGNOSTIC</span>
+                      <span className="font-mono text-xs text-white/45 font-bold tracking-wider">AI DIAGNOSTIC</span>
                     </div>
                     <p className="text-xs text-white/45 leading-relaxed border-l-2 border-[#6366f1]/20 pl-3 font-mono">
                       {hostedBot.aiExplanation}
@@ -899,6 +946,7 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {/* Crash log */}
                 {hostedBot?.errorMessage && !isProcessing && (
                   <div className="rounded-xl border border-red-500/12 bg-red-500/[0.03] overflow-hidden">
                     <button
@@ -907,7 +955,7 @@ export default function Dashboard() {
                     >
                       <div className="flex items-center gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400/50" />
-                        <span className="font-mono text-xs text-red-400/70 font-semibold tracking-wider">CRASH LOG</span>
+                        <span className="font-mono text-xs text-red-400/70 font-bold tracking-wider">CRASH LOG</span>
                       </div>
                       {showLogs ? <ChevronUp className="h-3.5 w-3.5 text-red-400/30" /> : <ChevronDown className="h-3.5 w-3.5 text-red-400/30" />}
                     </button>
@@ -927,10 +975,10 @@ export default function Dashboard() {
                   try { entries = JSON.parse((hostedBot as any)?.repairLog ?? '[]'); } catch { entries = []; }
                   if (entries.length === 0) return null;
                   return (
-                    <div className="rounded-xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
+                    <div className="rounded-xl border border-white/[0.06] bg-[#0d0d1a] overflow-hidden">
                       <div className="px-5 py-3 border-b border-white/[0.05] flex items-center gap-2">
                         <Zap className="h-3.5 w-3.5 text-[#6366f1]/60" />
-                        <span className="font-mono text-xs text-white/45 font-semibold tracking-wider">AI REPAIR HISTORY</span>
+                        <span className="font-mono text-xs text-white/45 font-bold tracking-wider">AI REPAIR HISTORY</span>
                         <span className="ml-auto font-mono text-[10px] text-white/25 border border-white/[0.06] rounded-md px-1.5 py-0.5">
                           {entries.length} action{entries.length !== 1 ? 's' : ''}
                         </span>
@@ -952,21 +1000,21 @@ export default function Dashboard() {
                   );
                 })()}
 
+                {/* Empty state */}
                 {!hostedBot?.errorMessage && !hostedBot?.aiExplanation && !(hostedBot && (hostedBot as any).repairAttempts > 0) && (() => {
                   let entries: Array<unknown> = [];
                   try { entries = JSON.parse((hostedBot as any)?.repairLog ?? '[]'); } catch { entries = []; }
                   return entries.length === 0;
-                })() && (
-                  <div className="rounded-xl border border-white/[0.05] bg-[#0d0d18] px-5 py-10 flex flex-col items-center text-center">
-                    <Activity className="h-8 w-8 text-white/[0.07] mb-3" />
-                    <p className="font-mono text-xs text-white/20 tracking-wider">
-                      {hostedBot ? 'Bot is running — no issues to report.' : 'No bot deployed. Deploy one above to get started.'}
-                    </p>
+                })() && hostedBot && (
+                  <div className="rounded-xl border border-white/[0.05] bg-[#0d0d1a] px-5 py-8 flex flex-col items-center text-center">
+                    <Activity className="h-7 w-7 text-white/[0.08] mb-3" />
+                    <p className="font-mono text-xs text-white/20 tracking-wider">Bot is running — no issues to report.</p>
                   </div>
                 )}
 
-                <div className="rounded-xl border border-white/[0.05] bg-[#0d0d18] px-4 py-3.5">
-                  <p className="font-mono text-[9px] text-white/20 tracking-widest mb-3">PLAN</p>
+                {/* Plan info */}
+                <div className="rounded-xl border border-white/[0.05] bg-[#0d0d1a] px-4 py-3.5">
+                  <p className="font-mono text-[9px] text-white/20 tracking-[0.25em] mb-3">PLAN DETAILS</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {[
                       { k: 'Runtime', v: 'Python · Node.js · Java' },
@@ -975,136 +1023,169 @@ export default function Dashboard() {
                       { k: 'Duration', v: (session as any).hostingDurationDays != null ? `${(session as any).hostingDurationDays}d` : '—' },
                     ].map(({ k, v }) => (
                       <div key={k}>
-                        <div className="text-[9px] font-mono text-white/20 mb-0.5">{k}</div>
+                        <div className="text-[9px] font-mono text-white/20 mb-0.5 tracking-widest">{k.toUpperCase()}</div>
                         <div className="text-xs font-mono text-white/50">{v}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-              </TabsContent>
+              </div>
+            )}
 
-              {/* Files */}
-              <TabsContent value="files" className="mt-0">
-                <FileManager hasBot={!!hostedBot} />
-              </TabsContent>
-
-              {/* Secrets */}
-              <TabsContent value="secrets" className="mt-0">
-                <div className="rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
-                  <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between">
-                    <div>
-                      <div className="font-mono text-xs text-white/55 font-semibold tracking-wider">ENVIRONMENT SECRETS</div>
-                      <div className="text-[11px] text-white/25 font-mono mt-0.5">Injected at startup — restart to apply</div>
-                    </div>
-                    {envDirty && <span className="text-[10px] font-mono text-yellow-400/60 bg-yellow-500/[0.08] border border-yellow-500/15 rounded-md px-2 py-0.5">Unsaved</span>}
+            {/* ── Console Tab ──────────────────────────────────────────── */}
+            {activeTab === 'console' && (
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0a0a14] overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06] bg-white/[0.015] shrink-0">
+                  <div className="flex gap-1.5">
+                    <div className="h-3 w-3 rounded-full bg-red-500/40" />
+                    <div className="h-3 w-3 rounded-full bg-yellow-500/40" />
+                    <div className="h-3 w-3 rounded-full bg-emerald-500/40" />
                   </div>
+                  <span className="ml-2 text-[11px] font-mono text-white/25 tracking-wider">bot — stdout</span>
+                  {hostedBot && (
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <div className={`h-1.5 w-1.5 rounded-full ${hostedBot.status === 'online' || hostedBot.status === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-white/20'}`} />
+                      <StatusBadge status={hostedBot.status} />
+                    </div>
+                  )}
+                </div>
+                <LiveConsole hasBot={!!(hostedBot && hostedBot.fileName)} />
+              </div>
+            )}
 
-                  <div className="p-5 space-y-4">
-                    <p className="text-xs text-white/28 font-mono leading-relaxed">
-                      Add keys like <span className="text-white/50">DISCORD_TOKEN</span> or <span className="text-white/50">MONGODB_URI</span>. Save, then restart to apply.
-                    </p>
+            {/* ── Files Tab ────────────────────────────────────────────── */}
+            {activeTab === 'files' && (
+              <FileManager hasBot={!!hostedBot} />
+            )}
 
-                    {envEntries.length > 0 && (
-                      <div className="space-y-2">
-                        {envEntries.map((entry, i) => (
-                          <div key={i} className="flex gap-2 items-center group">
+            {/* ── Secrets Tab ──────────────────────────────────────────── */}
+            {activeTab === 'secrets' && (
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d1a] overflow-hidden">
+                <div className="h-px w-full"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent)' }}
+                />
+                <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between">
+                  <div>
+                    <div className="font-mono text-xs text-white/60 font-bold tracking-[0.15em]">ENVIRONMENT SECRETS</div>
+                    <div className="text-[11px] text-white/25 font-mono mt-0.5">Injected at startup — restart to apply</div>
+                  </div>
+                  {envDirty && <span className="text-[10px] font-mono text-yellow-400/60 bg-yellow-500/[0.08] border border-yellow-500/15 rounded-md px-2 py-0.5">Unsaved changes</span>}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <p className="text-xs text-white/28 font-mono leading-relaxed">
+                    Add keys like <span className="text-white/50">DISCORD_TOKEN</span> or <span className="text-white/50">MONGODB_URI</span>. Save, then restart to apply.
+                  </p>
+
+                  {envEntries.length > 0 && (
+                    <div className="space-y-2">
+                      {envEntries.map((entry, i) => (
+                        <div key={i} className="flex gap-2 items-center group">
+                          <input
+                            type="text"
+                            placeholder="KEY"
+                            value={entry.key}
+                            onChange={(e) => handleEnvChange(i, 'key', e.target.value)}
+                            className="flex-[0_0_36%] bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors uppercase"
+                            spellCheck={false}
+                          />
+                          <div className="flex-1 relative">
                             <input
-                              type="text"
-                              placeholder="KEY"
-                              value={entry.key}
-                              onChange={(e) => handleEnvChange(i, 'key', e.target.value)}
-                              className="flex-[0_0_36%] bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors uppercase"
+                              type={entry.hidden ? 'password' : 'text'}
+                              placeholder="value"
+                              value={entry.value}
+                              onChange={(e) => handleEnvChange(i, 'value', e.target.value)}
+                              className="w-full bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 pr-8 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
                               spellCheck={false}
                             />
-                            <div className="flex-1 relative">
-                              <input
-                                type={entry.hidden ? 'password' : 'text'}
-                                placeholder="value"
-                                value={entry.value}
-                                onChange={(e) => handleEnvChange(i, 'value', e.target.value)}
-                                className="w-full bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2 pr-8 font-mono text-xs text-white/65 placeholder:text-white/18 focus:outline-none focus:border-[#6366f1]/30 transition-colors"
-                                spellCheck={false}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleToggleHidden(i)}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/18 hover:text-white/45 transition-colors"
-                              >
-                                {entry.hidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                              </button>
-                            </div>
                             <button
                               type="button"
-                              onClick={() => handleDeleteEnvRow(i)}
-                              className="text-white/15 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                              onClick={() => handleToggleHidden(i)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/18 hover:text-white/45 transition-colors"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              {entry.hidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                             </button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {envEntries.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-white/[0.06] p-8 text-center">
-                        <Key className="h-6 w-6 text-white/10 mx-auto mb-2" />
-                        <p className="text-[11px] font-mono text-white/20">No secrets added yet.</p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={handleAddEnvRow}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/35 hover:text-white/65 hover:border-white/[0.14] transition-all duration-200"
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add Secret
-                      </button>
-                      <button
-                        onClick={handleSaveEnv}
-                        disabled={envSaving || !envDirty}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#6366f1]/25 text-xs font-mono text-[#6366f1]/70 hover:text-[#6366f1] hover:border-[#6366f1]/45 hover:bg-[#6366f1]/[0.05] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        {envSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                        {envSaving ? 'Saving…' : 'Save Secrets'}
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEnvRow(i)}
+                            className="text-white/15 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
+                  )}
+
+                  {envEntries.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-white/[0.06] p-10 text-center">
+                      <Key className="h-6 w-6 text-white/10 mx-auto mb-2" />
+                      <p className="text-[11px] font-mono text-white/20">No secrets added yet.</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleAddEnvRow}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-white/[0.07] text-xs font-mono text-white/35 hover:text-white/65 hover:border-white/[0.14] transition-all duration-200"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Secret
+                    </button>
+                    <button
+                      onClick={handleSaveEnv}
+                      disabled={envSaving || !envDirty}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#6366f1]/25 text-xs font-mono text-[#6366f1]/70 hover:text-[#6366f1] hover:border-[#6366f1]/45 hover:bg-[#6366f1]/[0.05] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {envSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      {envSaving ? 'Saving…' : 'Save Secrets'}
+                    </button>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+            )}
+
+            {/* ── AI Agent Tab ─────────────────────────────────────────── */}
+            {activeTab === 'ai' && (
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0d0d1a] overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
+                <div className="shrink-0 flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.05]">
+                  <div className="h-8 w-8 rounded-xl bg-[#6366f1]/10 border border-[#6366f1]/20 flex items-center justify-center">
+                    <Zap className="h-4 w-4 text-[#6366f1]/70" />
+                  </div>
+                  <div>
+                    <div className="font-mono text-xs text-white/65 font-bold tracking-wider">LUMORA AI AGENT</div>
+                    <div className="text-[10px] font-mono text-white/25">Debugging & diagnostics assistant</div>
+                  </div>
+                  {(hostedBot?.status === 'crashed' || hostedBot?.status === 'error') && (
+                    <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-500/20 bg-red-500/[0.06]">
+                      <AlertTriangle className="h-3 w-3 text-red-400/70" />
+                      <span className="text-[10px] font-mono text-red-400/70">Bot crashed</span>
+                    </div>
+                  )}
+                </div>
+                <AIAgent botStatus={hostedBot?.status} errorMessage={hostedBot?.errorMessage} />
+              </div>
+            )}
           </div>
         </main>
-
-        {/* ─── Right: Console + AI ──────────────────────────────────────────── */}
-        <aside className="hidden lg:flex w-[380px] shrink-0 border-l border-white/[0.05] flex-col bg-[#0a0a14]">
-          <div className="shrink-0 flex items-center gap-0 border-b border-white/[0.05] px-1 pt-1">
-            {[
-              { id: 'console', icon: Terminal, label: 'Console' },
-              { id: 'ai', icon: Zap, label: 'AI Agent' },
-            ].map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setRightTab(id as any)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-mono tracking-wide border-b-2 transition-all duration-200 ${
-                  rightTab === id
-                    ? 'border-[#6366f1] text-white/75'
-                    : 'border-transparent text-white/25 hover:text-white/50'
-                }`}
-              >
-                <Icon className="h-3 w-3" />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {rightTab === 'console' ? (
-            <LiveConsole hasBot={!!(hostedBot && hostedBot.fileName)} />
-          ) : (
-            <AIAgent botStatus={hostedBot?.status} errorMessage={hostedBot?.errorMessage} />
-          )}
-        </aside>
       </div>
+
+      {/* ─── Mobile bottom nav ─────────────────────────────────────────────── */}
+      <nav className="md:hidden shrink-0 border-t border-white/[0.06] bg-[#09091a] flex items-center">
+        {sideNavItems.map(({ id, icon: Icon, label }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+              activeTab === id ? 'text-[#6366f1]' : 'text-white/25 hover:text-white/50'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="text-[9px] font-mono tracking-wide">{label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

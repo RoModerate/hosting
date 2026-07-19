@@ -2,11 +2,12 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { Router, type IRouter } from "express";
 import multer, { MulterError } from "multer";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import {
   db,
   hostingKeysTable,
   ticketsTable,
+  botLogsTable,
   type HostedBot,
   type HostingKey,
   type Ticket,
@@ -413,6 +414,37 @@ router.get("/bots/logs", async (req, res) => {
   }
   const log = getLiveLog(session.ticket.id);
   res.json({ log });
+});
+
+/** GET /bots/log-history — last 20 persistent log sessions for this bot */
+router.get("/bots/log-history", async (req, res) => {
+  const session = await resolveSession(req);
+  if (!session) {
+    clearSessionCookie(res);
+    res.status(401).json({ error: "No active session." });
+    return;
+  }
+
+  try {
+    const logs = await db
+      .select()
+      .from(botLogsTable)
+      .where(eq(botLogsTable.ticketId, session.ticket.id))
+      .orderBy(desc(botLogsTable.createdAt))
+      .limit(20);
+
+    res.json({
+      logs: logs.map((l) => ({
+        id: l.id,
+        eventType: l.eventType,
+        logContent: l.logContent,
+        createdAt: l.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch log history");
+    res.status(500).json({ error: "Failed to fetch log history." });
+  }
 });
 
 router.delete("/bots", async (req, res) => {

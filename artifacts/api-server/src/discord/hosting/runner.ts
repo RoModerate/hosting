@@ -4,7 +4,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import extract from "extract-zip";
 import { eq, inArray } from "drizzle-orm";
-import { db, hostedBotsTable, ticketsTable } from "@workspace/db";
+import { db, hostedBotsTable, ticketsTable, botLogsTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { ticketBotDir, ticketUploadDir } from "./paths";
 import {
@@ -31,6 +31,8 @@ import {
   MAX_REPAIR_ATTEMPTS,
 } from "./aiRepair";
 import { runAutonomousAgent } from "./aiAgent";
+import { encryptEnvVars, decryptEnvVars } from "../../lib/envCrypto";
+import { notifyUserDm } from "../notify";
 
 export const MAX_ZIP_BYTES = 100 * 1024 * 1024; // 100MB
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min — large monorepos can be slow
@@ -201,7 +203,8 @@ function botPort(ticketId: number): number {
 function parseEnvVars(raw: string | null | undefined): Record<string, string> {
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as unknown;
+    const decrypted = decryptEnvVars(raw);
+    const parsed = JSON.parse(decrypted) as unknown;
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const out: Record<string, string> = {};
       for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
@@ -233,7 +236,7 @@ export async function setHostedBotEnvVars(
     if (!key) continue;
     clean[key] = String(v);
   }
-  await updateHostedBot(ticketId, { envVars: JSON.stringify(clean) });
+  await updateHostedBot(ticketId, { envVars: encryptEnvVars(JSON.stringify(clean)) });
 }
 
 /**
@@ -1556,7 +1559,33 @@ function attachSupervision(
         logger.error({ err }, "Failed to update hosted bot status after crash");
       });
 
+    // Persist log history so users can review past crashes after a restart
+    db.insert(botLogsTable)
+      .values({
+        ticketId,
+        eventType: wasIntentional ? "stop" : "crash",
+        logContent: tailLog.slice(-50_000),
+      })
+      .catch((err: unknown) => {
+        logger.error({ err }, "Failed to save bot log history");
+      });
+
     if (wasIntentional) return;
+
+    // Send a Discord DM to the bot owner so they know immediately
+    db.select()
+      .from(ticketsTable)
+      .where(eq(ticketsTable.id, ticketId))
+      .then(([ticket]) => {
+        if (!ticket?.ownerId || ticket.ownerId.startsWith("unassigned") || ticket.ownerId.startsWith("staff-")) return;
+        const dmMsg =
+          `⚠️ **Your bot crashed!**\n\n` +
+          `Your hosted bot on **Lumora** stopped unexpectedly (exit code: \`${code ?? "unknown"}\`).\n` +
+          `Log in to the portal to view the logs and restart your bot.\n` +
+          (errorMessage ? `\n**Reason:** ${errorMessage.slice(0, 300)}` : "");
+        notifyUserDm(ticket.ownerId, dmMsg).catch(() => undefined);
+      })
+      .catch(() => undefined);
 
     onCrash?.({ exitCode: code });
     scheduleAutoRestart(ticketId, onCrash);

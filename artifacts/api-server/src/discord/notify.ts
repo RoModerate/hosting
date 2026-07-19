@@ -10,6 +10,20 @@ export function registerDiscordClient(client: Client): void {
 }
 
 /**
+ * Send a DM to a Discord user by ID. Used for crash notifications.
+ * Never throws — logs and no-ops if the bot isn't connected or can't DM.
+ */
+export async function notifyUserDm(discordUserId: string, content: string): Promise<void> {
+  if (!activeClient) return;
+  try {
+    const user = await activeClient.users.fetch(discordUserId);
+    await user.send(content);
+  } catch (err) {
+    logger.error({ err, discordUserId }, "Failed to send crash DM to user");
+  }
+}
+
+/**
  * Send a plain-text message into a ticket's Discord channel. Used so staff
  * stay informed of hosting activity (uploads, restarts, crashes) that
  * originates from the hosting portal website, not just from Discord itself.

@@ -1,0 +1,20 @@
+I really like the direction Lumora is going, but there are still some important improvements that need to be made to make it feel like a real production hosting platform instead of a prototype.
+
+Security & Infrastructure:
+- Add resource limits (CPU, RAM, and disk usage) for every hosted bot. One user's bot should never be able to consume all server resources or affect other users.
+- Add a complete billing and subscription system. Activation keys should not be issued manually. Users should be able to purchase plans, have subscriptions automatically managed, and have plans expire or renew without manual intervention.
+- Add Discord crash notifications. If a user's bot crashes, automatically send them a Discord DM or another notification instead of requiring them to constantly check the dashboard.
+- Persist logs. Right now logs disappear after a restart. Store logs in the database or on disk so users can view previous crashes and startup history even after the hosting service restarts.
+- Improve environment variable security. Secrets should never be stored as plain text. Encrypt them before saving them and only decrypt them when starting the user's bot.
+- Properly isolate every hosted bot. Bots should not all run as unrestricted processes on the same machine. Each deployment should be sandboxed so one bot cannot access another user's files or data.
+- Expand the admin panel. I need a proper user management system where I can view all users, suspend or ban accounts, change hosting plans, reset deployments, manage subscriptions, and perform administrative actions without editing the database manually.
+- Add upload and storage limits. Users should have storage quotas based on their plan and should not be able to upload unlimited file sizes.
+
+Design & User Experience:
+The current design works, but it feels too AI-generated and generic. It doesn't have the polished feel of a professional hosting company. I want the entire website redesigned with a unique identity.
+
+Completely redesign the home page, dashboard, and portal using inspiration from modern hosting providers such as Railway, Pterodactyl, Coolify, DigitalOcean, Vercel, Fly.io, Render, Hetzner, and similar platforms. Do not copy them, but use them as inspiration for layout, spacing, navigation, and overall user experience.
+
+I want a clean, premium, futuristic interface that feels handcrafted rather than AI-generated. Improve typography, spacing, colors, animations, cards, icons, buttons, navigation, dashboards, and page layouts. Add subtle motion and smooth transitions without making the interface distracting. Everything should feel modern, responsive, and professional.
+
+Add more useful information throughout the portal, such as deployment status, resource usage, uptime, bot health, recent activity, deployment history, quick actions, and better deployment progress indicators. Make the dashboard feel alive and informative instead of mostly empty.

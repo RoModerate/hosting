@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import crypto from "node:crypto";
-import { db, appConfigTable, ticketsTable, hostingKeysTable } from "@workspace/db";
+import { db, appConfigTable, ticketsTable, hostingKeysTable, hostedBotsTable } from "@workspace/db";
 import { connectBot, getBotStatus } from "../discord/connectionManager";
+import { stopHostedBot, updateHostedBot } from "../discord/hosting/runner";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -264,6 +265,151 @@ router.get("/admin/tickets", async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to list tickets");
     res.status(500).json({ error: "Failed to fetch tickets." });
+  }
+});
+
+// ─── User management ─────────────────────────────────────────────────────────
+
+/** GET /admin/users — all users with bot status, key info, quick actions */
+router.get("/admin/users", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  try {
+    const tickets = await db.select().from(ticketsTable).orderBy(desc(ticketsTable.id));
+    const keys = await db.select().from(hostingKeysTable);
+    const bots = await db.select().from(hostedBotsTable);
+
+    const users = tickets.map((t) => {
+      const ticketKeys = keys.filter((k) => k.ticketId === t.id);
+      const bot = bots.find((b) => b.ticketId === t.id) ?? null;
+      const activeKey = ticketKeys.find(
+        (k) => k.status === "active" && k.expiresAt && k.expiresAt.getTime() > Date.now(),
+      ) ?? null;
+      return {
+        ticketId: t.id,
+        ownerId: t.ownerId,
+        ownerUsername: t.ownerUsername,
+        ticketStatus: t.status,
+        createdAt: (t as any).createdAt,
+        activeKey: activeKey
+          ? { id: activeKey.id, expiresAt: activeKey.expiresAt, hostingDurationDays: activeKey.hostingDurationDays }
+          : null,
+        allKeys: ticketKeys.map((k) => ({
+          id: k.id,
+          status: k.status,
+          expiresAt: k.expiresAt,
+          hostingDurationDays: k.hostingDurationDays,
+        })),
+        bot: bot
+          ? {
+              status: bot.status,
+              fileName: bot.fileName,
+              botName: bot.botName,
+              restartCount: bot.restartCount,
+              lastStartedAt: bot.lastStartedAt,
+              errorMessage: bot.errorMessage,
+            }
+          : null,
+      };
+    });
+
+    res.json({ users });
+  } catch (err) {
+    logger.error({ err }, "Failed to list users");
+    res.status(500).json({ error: "Failed to fetch users." });
+  }
+});
+
+/** POST /admin/tickets/:id/suspend — revoke all active keys (blocks login) */
+router.post("/admin/tickets/:id/suspend", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  try {
+    // Revoke all active/unused keys for this ticket
+    const keys = await db.select().from(hostingKeysTable).where(eq(hostingKeysTable.ticketId, ticketId));
+    for (const k of keys) {
+      if (k.status === "active" || k.status === "unused") {
+        await db.update(hostingKeysTable).set({ status: "revoked" }).where(eq(hostingKeysTable.id, k.id));
+      }
+    }
+    logger.info({ ticketId }, "Admin suspended user (all keys revoked)");
+    res.json({ ok: true, revokedCount: keys.filter((k) => k.status === "active" || k.status === "unused").length });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to suspend user");
+    res.status(500).json({ error: "Failed to suspend user." });
+  }
+});
+
+/** POST /admin/tickets/:id/reset-bot — stop + clear bot deployment */
+router.post("/admin/tickets/:id/reset-bot", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  try {
+    await stopHostedBot(ticketId).catch(() => undefined);
+    await updateHostedBot(ticketId, {
+      status: "stopped",
+      errorMessage: "Deployment reset by admin.",
+      aiExplanation: null,
+    }).catch(() => undefined);
+    logger.info({ ticketId }, "Admin reset bot deployment");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to reset bot");
+    res.status(500).json({ error: "Failed to reset bot." });
+  }
+});
+
+/** DELETE /admin/tickets/:id — delete user account and all associated data */
+router.delete("/admin/tickets/:id", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  try {
+    await stopHostedBot(ticketId).catch(() => undefined);
+    await db.delete(hostedBotsTable).where(eq(hostedBotsTable.ticketId, ticketId));
+    await db.delete(hostingKeysTable).where(eq(hostingKeysTable.ticketId, ticketId));
+    await db.delete(ticketsTable).where(eq(ticketsTable.id, ticketId));
+    logger.info({ ticketId }, "Admin deleted user account");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to delete user");
+    res.status(500).json({ error: "Failed to delete user." });
+  }
+});
+
+/** POST /admin/keys/:id/revoke — revoke a specific hosting key */
+router.post("/admin/keys/:id/revoke", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const keyId = parseInt(req.params["id"] ?? "0");
+  try {
+    await db.update(hostingKeysTable).set({ status: "revoked" }).where(eq(hostingKeysTable.id, keyId));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, keyId }, "Failed to revoke key");
+    res.status(500).json({ error: "Failed to revoke key." });
   }
 });
 
