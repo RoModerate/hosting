@@ -15,22 +15,45 @@ const DISCORD_GUILD_ID = process.env["DISCORD_GUILD_ID"] ?? "";
 const DISCORD_STAFF_ROLE_ID = process.env["DISCORD_STAFF_ROLE_ID"] ?? "";
 
 /**
- * Check whether a Discord user has the staff role in the guild using the bot
- * token. Returns false on any error so it never blocks login attempts.
+ * Check whether a Discord user should be granted admin/staff access.
+ * Returns true if they are the guild owner OR have the configured staff role.
+ * Returns false on any error so it never blocks normal login attempts.
  */
 async function isStaffMember(discordUserId: string): Promise<boolean> {
-  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID || !DISCORD_STAFF_ROLE_ID) {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
+    logger.warn("isStaffMember: DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set, skipping staff check");
     return false;
   }
   try {
-    const res = await fetch(
+    // Check guild info to see if this user is the owner
+    const guildRes = await fetch(
+      `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}`,
+      { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } },
+    );
+    if (guildRes.ok) {
+      const guild = await guildRes.json() as { owner_id: string };
+      if (guild.owner_id === discordUserId) {
+        logger.info({ discordUserId }, "isStaffMember: user is guild owner — granting staff access");
+        return true;
+      }
+    } else {
+      logger.warn({ status: guildRes.status }, "isStaffMember: failed to fetch guild info");
+    }
+
+    // Check guild member roles
+    const memberRes = await fetch(
       `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}`,
       { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } },
     );
-    if (!res.ok) return false;
-    const member = await res.json() as { roles: string[] };
-    return member.roles.includes(DISCORD_STAFF_ROLE_ID);
-  } catch {
+    if (!memberRes.ok) {
+      logger.warn({ status: memberRes.status, discordUserId }, "isStaffMember: failed to fetch guild member");
+      return false;
+    }
+    const member = await memberRes.json() as { roles: string[] };
+    logger.info({ discordUserId, roles: member.roles, staffRoleId: DISCORD_STAFF_ROLE_ID }, "isStaffMember: checking roles");
+    return DISCORD_STAFF_ROLE_ID ? member.roles.includes(DISCORD_STAFF_ROLE_ID) : false;
+  } catch (err) {
+    logger.error({ err }, "isStaffMember: unexpected error");
     return false;
   }
 }
