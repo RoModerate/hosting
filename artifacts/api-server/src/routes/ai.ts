@@ -505,22 +505,28 @@ router.post("/ai/chat", async (req, res) => {
 
   const ticketId = session.ticket.id;
 
-  // Resolve OpenRouter key: system env > DB admin config > user's own bot env vars
-  let resolvedApiKey = process.env["OPENROUTER_API_KEY"] || "";
+  // Resolve OpenRouter key — priority: user's own bot env > DB admin config > system env
+  // User's own key takes highest priority so they can always override a broken system key.
+  let resolvedApiKey = "";
 
+  // 1. User's own bot env vars (highest priority — user-controlled)
+  try {
+    const { getHostedBotEnvVars } = await import("../discord/hosting/runner");
+    const userVars = await getHostedBotEnvVars(ticketId);
+    resolvedApiKey = (userVars["OPENROUTER_API_KEY"] || "").trim();
+  } catch { /* continue */ }
+
+  // 2. DB admin config
   if (!resolvedApiKey) {
-    // Check DB admin config
     const { db: dbInstance, appConfigTable: configTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
     const [row] = await dbInstance.select().from(configTable).where(eq(configTable.key, "OPENROUTER_API_KEY"));
-    if (row?.value) resolvedApiKey = row.value;
+    if (row?.value) resolvedApiKey = row.value.trim();
   }
 
+  // 3. System env (Replit Secret)
   if (!resolvedApiKey) {
-    // Check user's own bot env vars (set via AI Settings in File Manager)
-    const { getHostedBotEnvVars } = await import("../discord/hosting/runner");
-    const userVars = await getHostedBotEnvVars(ticketId);
-    resolvedApiKey = userVars["OPENROUTER_API_KEY"] || "";
+    resolvedApiKey = (process.env["OPENROUTER_API_KEY"] || "").trim();
   }
 
   if (!resolvedApiKey) {
@@ -653,7 +659,7 @@ Only trigger this when the user explicitly asks you to fix/diagnose, or when the
         // Build a specific, actionable error message based on the status code.
         let userError: string;
         if (response.status === 401) {
-          userError = "The OpenRouter API key is invalid. The server admin should check it in the admin panel.";
+          userError = "The OpenRouter API key is invalid or expired. Update the OPENROUTER_API_KEY secret in your Replit project settings, or set a new key in the Admin panel → System Config.";
         } else if (response.status === 402) {
           const afford = errText.match(/can only afford (\d+)/i);
           const hint = afford ? ` (balance: ~${afford[1]} tokens)` : "";

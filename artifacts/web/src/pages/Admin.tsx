@@ -15,7 +15,7 @@ import {
   Lock, ShieldAlert, Bot, Settings2, CheckCircle2, XCircle,
   Save, Key, Plus, Copy, RefreshCw, Loader2, Eye, EyeOff,
   MessageSquare, Trash2, Users, Link, Zap, AlertTriangle,
-  Terminal, Shield,
+  Terminal, Shield, PowerOff, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -442,6 +442,8 @@ function UsersManager({ adminPassword }: { adminPassword: string }) {
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState<number | null>(null);
+  const [banningId, setBanningId] = useState<number | null>(null);
+  const [banDays, setBanDays] = useState(7);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -508,6 +510,59 @@ function UsersManager({ adminPassword }: { adminPassword: string }) {
       fetchUsers();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to delete');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleBan = async (id: number) => {
+    setActingId(id);
+    try {
+      const r = await fetch(`${BASE}/api/admin/tickets/${id}/ban`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ days: banDays }),
+      });
+      if (!r.ok) throw new Error('Failed to ban');
+      toast.success(banDays === 0 ? 'User permanently banned' : `User banned for ${banDays} days`);
+      setBanningId(null);
+      fetchUsers();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to ban');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleUnban = async (id: number) => {
+    setActingId(id);
+    try {
+      const r = await fetch(`${BASE}/api/admin/tickets/${id}/unban`, {
+        method: 'POST',
+        headers: { 'x-admin-password': adminPassword },
+      });
+      if (!r.ok) throw new Error('Failed to unban');
+      toast.success('User unbanned');
+      fetchUsers();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to unban');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleStopBot = async (id: number) => {
+    setActingId(id);
+    try {
+      const r = await fetch(`${BASE}/api/admin/tickets/${id}/stop-bot`, {
+        method: 'POST',
+        headers: { 'x-admin-password': adminPassword },
+      });
+      if (!r.ok) throw new Error('Failed to stop bot');
+      toast.success('Bot stopped');
+      fetchUsers();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to stop bot');
     } finally {
       setActingId(null);
     }
@@ -597,29 +652,46 @@ function UsersManager({ adminPassword }: { adminPassword: string }) {
                       <span className="font-mono text-[11px] text-white/40">{expiresAt}</span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleSuspend(user.id)}
-                          disabled={isActing}
-                          title="Suspend"
-                          className="p-1.5 rounded-lg text-yellow-400/50 hover:text-yellow-400 hover:bg-yellow-500/[0.08] border border-transparent hover:border-yellow-500/20 transition-all disabled:opacity-30"
-                        >
-                          {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {user.botStatus && user.botStatus !== 'stopped' && (
+                          <button onClick={() => handleStopBot(user.id)} disabled={isActing} title="Stop Bot"
+                            className="p-1.5 rounded-lg text-orange-400/50 hover:text-orange-400 hover:bg-orange-500/[0.08] border border-transparent transition-all disabled:opacity-30">
+                            <PowerOff className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {banningId === user.id ? (
+                          <div className="flex items-center gap-1">
+                            <select value={banDays} onChange={(e) => setBanDays(Number(e.target.value))}
+                              className="bg-[#0d0d1a] border border-red-500/20 rounded px-1 py-0.5 text-[10px] font-mono text-white/50 focus:outline-none">
+                              <option value={1}>1d</option>
+                              <option value={7}>7d</option>
+                              <option value={30}>30d</option>
+                              <option value={0}>Perm</option>
+                            </select>
+                            <button onClick={() => handleBan(user.id)} disabled={isActing}
+                              className="px-2 py-1 rounded text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-30">
+                              {isActing ? <Loader2 className="h-3 w-3 animate-spin inline" /> : 'Ban'}
+                            </button>
+                            <button onClick={() => setBanningId(null)} className="p-0.5 text-white/25 hover:text-white/50">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setBanningId(user.id)} disabled={isActing} title="Ban"
+                            className="p-1.5 rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/[0.08] border border-transparent transition-all disabled:opacity-30">
+                            <Shield className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => handleUnban(user.id)} disabled={isActing} title="Unban"
+                          className="p-1.5 rounded-lg text-emerald-400/40 hover:text-emerald-400 hover:bg-emerald-500/[0.08] border border-transparent transition-all disabled:opacity-30">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleResetBot(user.id)}
-                          disabled={isActing}
-                          title="Reset Bot"
-                          className="p-1.5 rounded-lg text-blue-400/50 hover:text-blue-400 hover:bg-blue-500/[0.08] border border-transparent hover:border-blue-500/20 transition-all disabled:opacity-30"
-                        >
+                        <button onClick={() => handleResetBot(user.id)} disabled={isActing} title="Reset Bot"
+                          className="p-1.5 rounded-lg text-blue-400/50 hover:text-blue-400 hover:bg-blue-500/[0.08] border border-transparent transition-all disabled:opacity-30">
                           <RefreshCw className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          disabled={isActing}
-                          title="Delete User"
-                          className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/[0.08] border border-transparent hover:border-red-500/20 transition-all disabled:opacity-30"
-                        >
+                        <button onClick={() => handleDelete(user.id)} disabled={isActing} title="Delete"
+                          className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/[0.08] border border-transparent transition-all disabled:opacity-30">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>

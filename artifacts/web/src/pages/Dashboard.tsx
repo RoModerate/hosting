@@ -506,6 +506,39 @@ function AIAgent({ botStatus, errorMessage }: { botStatus?: string; errorMessage
 }
 
 // ─── Sidebar Nav Item ─────────────────────────────────────────────────────────
+function BotUptimeCounter({ lastStartedAt, status }: { lastStartedAt: string | null | undefined; status: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  const isLive = status === 'online' || status === 'running';
+
+  useEffect(() => {
+    if (!lastStartedAt || !isLive) { setElapsed(0); return; }
+    const startMs = new Date(lastStartedAt).getTime();
+    const update = () => setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [lastStartedAt, isLive]);
+
+  const fmt = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+
+  return (
+    <div className="px-5 py-3.5">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <div className={`h-1 w-1 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-white/20'}`} />
+        <div className="text-[9px] font-mono text-white/22 tracking-widest">UPTIME</div>
+      </div>
+      <div className="font-mono text-xs text-white/60 tabular-nums">
+        {isLive && lastStartedAt
+          ? `${fmt(h)}:${fmt(m)}:${fmt(s)}`
+          : '—'}
+      </div>
+    </div>
+  );
+}
+
 function SideNavItem({
   icon: Icon, label, active, onClick, badge,
 }: {
@@ -832,9 +865,9 @@ export default function Dashboard() {
 
                     {/* Stat cards */}
                     <div className="grid grid-cols-3 divide-x divide-white/[0.04] border-b border-white/[0.04]">
+                      <BotUptimeCounter lastStartedAt={hostedBot.lastStartedAt} status={hostedBot.status} />
                       {[
                         { label: 'Restarts', value: String(hostedBot.restartCount) },
-                        { label: 'Started', value: hostedBot.lastStartedAt ? formatDistanceToNow(new Date(hostedBot.lastStartedAt), { addSuffix: true }) : '—' },
                         { label: 'Command', value: hostedBot.startCommand || '—' },
                       ].map(({ label, value }) => (
                         <div key={label} className="px-5 py-3.5">

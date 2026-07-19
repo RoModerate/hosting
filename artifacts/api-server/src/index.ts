@@ -2,12 +2,22 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startDiscordBot } from "./discord";
 
+// ─── Process crash protection ─────────────────────────────────────────────────
+// Prevent a single unhandled exception from killing the entire hosting server —
+// users' bots would all go offline. Log and continue instead.
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "Uncaught exception — server continuing");
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error({ reason }, "Unhandled promise rejection — server continuing");
+});
+
+// ─── Start ────────────────────────────────────────────────────────────────────
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 
 const port = Number(rawPort);
@@ -21,7 +31,6 @@ app.listen(port, (err) => {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
-
   logger.info({ port }, "Server listening");
 });
 

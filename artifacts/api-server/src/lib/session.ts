@@ -4,6 +4,7 @@ import {
   db,
   hostingKeysTable,
   ticketsTable,
+  appConfigTable,
   type HostingKey,
   type Ticket,
 } from "@workspace/db";
@@ -104,6 +105,22 @@ export async function resolveSession(
     .from(ticketsTable)
     .where(eq(ticketsTable.id, key.ticketId));
   if (!ticket) return null;
+
+  // Check timed ban
+  const [banRow] = await db
+    .select()
+    .from(appConfigTable)
+    .where(eq(appConfigTable.key, `ban:ticket:${ticket.id}`));
+  if (banRow) {
+    try {
+      const ban = JSON.parse(banRow.value) as { expiresAt: string };
+      if (ban.expiresAt === "permanent" || new Date(ban.expiresAt).getTime() > Date.now()) {
+        return null; // banned
+      }
+      // Ban expired — clean it up asynchronously
+      db.delete(appConfigTable).where(eq(appConfigTable.key, `ban:ticket:${ticket.id}`)).catch(() => {});
+    } catch { /* malformed ban entry — ignore */ }
+  }
 
   return { key, ticket, discord: payload.discord ?? null };
 }

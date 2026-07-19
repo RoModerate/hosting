@@ -413,6 +413,87 @@ router.post("/admin/keys/:id/revoke", async (req, res) => {
   }
 });
 
+// ─── Timed ban ───────────────────────────────────────────────────────────────
+
+/** POST /admin/tickets/:id/ban — ban user for N days (0 = permanent) */
+router.post("/admin/tickets/:id/ban", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  const { days, reason } = req.body as { days?: number; reason?: string };
+  const banDays = Number(days ?? 0);
+
+  try {
+    // Stop bot immediately
+    await stopHostedBot(ticketId).catch(() => undefined);
+
+    const expiresAt = banDays > 0
+      ? new Date(Date.now() + banDays * 24 * 60 * 60 * 1000).toISOString()
+      : "permanent";
+
+    const banKey = `ban:ticket:${ticketId}`;
+    const banValue = JSON.stringify({ expiresAt, reason: reason?.slice(0, 200) || null, bannedAt: new Date().toISOString() });
+
+    await db
+      .insert(appConfigTable)
+      .values({ key: banKey, value: banValue })
+      .onConflictDoUpdate({
+        target: appConfigTable.key,
+        set: { value: banValue, updatedAt: new Date() },
+      });
+
+    logger.info({ ticketId, banDays, expiresAt }, "Admin banned user");
+    res.json({ ok: true, expiresAt });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to ban user");
+    res.status(500).json({ error: "Failed to ban user." });
+  }
+});
+
+/** POST /admin/tickets/:id/unban — lift a ban */
+router.post("/admin/tickets/:id/unban", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  try {
+    const { eq: eqFn } = await import("drizzle-orm");
+    await db.delete(appConfigTable).where(eqFn(appConfigTable.key, `ban:ticket:${ticketId}`));
+    logger.info({ ticketId }, "Admin unbanned user");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to unban user");
+    res.status(500).json({ error: "Failed to unban user." });
+  }
+});
+
+/** POST /admin/tickets/:id/stop-bot — forcefully stop a user's bot */
+router.post("/admin/tickets/:id/stop-bot", async (req, res) => {
+  const password = (req.headers["x-admin-password"] as string) || "";
+  if (!checkAdminAuth(password)) {
+    res.status(401).json({ error: "Invalid admin password." });
+    return;
+  }
+
+  const ticketId = parseInt(req.params["id"] ?? "0");
+  try {
+    await stopHostedBot(ticketId).catch(() => undefined);
+    await updateHostedBot(ticketId, { status: "stopped", errorMessage: "Bot stopped by admin." }).catch(() => undefined);
+    logger.info({ ticketId }, "Admin stopped bot");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, ticketId }, "Failed to stop bot");
+    res.status(500).json({ error: "Failed to stop bot." });
+  }
+});
+
 router.patch("/admin/tickets/:id/link", async (req, res) => {
   const password = (req.headers["x-admin-password"] as string) || "";
   if (!checkAdminAuth(password)) {
