@@ -8,6 +8,7 @@ import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Admin from '@/pages/Admin';
+import Pricing from '@/pages/Pricing';
 import DiscordCallback from '@/pages/DiscordCallback';
 import Banner from '@/pages/Banner';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/auth/discord/callback" component={DiscordCallback} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>

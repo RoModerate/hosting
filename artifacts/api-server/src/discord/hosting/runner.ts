@@ -2395,26 +2395,24 @@ export async function resumeHostedBotsOnBoot(
   // "starting" bots that already have an extractPath (were fully uploaded)
   // can be auto-resumed just like running bots.  Bots with no extractPath
   // were mid-upload when we went down — reset them to stopped.
-  const startingRows = await db
+  // Any bot stuck in "starting" or "installing" at boot time had its process
+  // killed when the server went down. Reset them all to "stopped".
+  const stuckOnBootRows = await db
     .select()
     .from(hostedBotsTable)
-    .where(eq(hostedBotsTable.status, "starting"));
+    .where(inArray(hostedBotsTable.status, ["starting", "installing"]));
 
-  // Any bot stuck in "starting" at boot time had its process killed when the
-  // server went down. Auto-resuming them hides genuine crash-loop problems and
-  // confused users who tried to stop a bot before the server restarted.
-  // Reset them all to "stopped" and let the user decide when to restart.
-  if (startingRows.length > 0) {
+  if (stuckOnBootRows.length > 0) {
     await db
       .update(hostedBotsTable)
       .set({
         status: "stopped",
-        errorMessage: null,
+        errorMessage: "Stopped — server was restarted during setup. Click Run to try again.",
       })
       .where(
         inArray(
           hostedBotsTable.ticketId,
-          startingRows.map((r) => r.ticketId),
+          stuckOnBootRows.map((r) => r.ticketId),
         ),
       );
   }
