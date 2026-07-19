@@ -653,7 +653,27 @@ export default function Dashboard() {
     );
   }
 
-  if (!session) return null;
+  if (!session || isError) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[#080810]">
+        <div className="flex flex-col items-center gap-4 text-center px-4">
+          <div className="h-12 w-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <AlertTriangle className="h-6 w-6 text-red-400/70" />
+          </div>
+          <div>
+            <p className="font-mono text-sm text-white/50 mb-1">Session expired or not found</p>
+            <p className="font-mono text-xs text-white/25">You may need to log in again.</p>
+          </div>
+          <button
+            onClick={() => setLocation('/login')}
+            className="mt-2 px-4 py-2 rounded-xl text-xs font-mono text-white/60 border border-white/[0.08] hover:border-white/[0.15] hover:text-white/80 transition-all duration-200"
+          >
+            Back to login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const { hostedBot } = session;
   const isProcessing = hostedBot?.status === 'installing' || hostedBot?.status === 'starting' || hostedBot?.status === 'connecting';
