@@ -142,7 +142,7 @@ router.get("/auth/discord/url", (req, res) => {
     client_id: DISCORD_CLIENT_ID,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "identify",
+    scope: "identify guilds",
   });
 
   res.json({ url: `https://discord.com/api/oauth2/authorize?${params}` });
