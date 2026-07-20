@@ -38,6 +38,9 @@ app.use(
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
 
+// ─── Trust proxy (required for accurate IP behind Replit's reverse proxy) ────
+app.set("trust proxy", 1);
+
 // ─── Body parsing ────────────────────────────────────────────────────────────
 app.use(cookieParser(SESSION_SECRET));
 app.use(express.json({ limit: "2mb" }));

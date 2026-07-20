@@ -12,7 +12,7 @@ const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"] ?? "";
 const DISCORD_CLIENT_SECRET = process.env["DISCORD_CLIENT_SECRET"] ?? "";
 const DISCORD_BOT_TOKEN = process.env["DISCORD_BOT_TOKEN"] ?? "";
 const DISCORD_GUILD_ID = process.env["DISCORD_GUILD_ID"] ?? "";
-const DISCORD_STAFF_ROLE_ID = process.env["DISCORD_STAFF_ROLE_ID"] ?? "";
+const DISCORD_STAFF_ROLE_ID = (process.env["DISCORD_STAFF_ROLE_ID"] ?? "").replace(/^staff-/, "");
 
 /**
  * Check whether a Discord user should be granted admin/staff access.
