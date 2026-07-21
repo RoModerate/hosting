@@ -50,7 +50,8 @@ export default function Login() {
     setDiscordLoading(true);
     setDiscordError(null);
     try {
-      const redirectUri = window.location.origin + (import.meta.env.BASE_URL?.replace(/\/$/, '') || '') + '/auth/discord/callback';
+      const origin = window.location.origin.replace(/^http:\/\//, 'https://');
+      const redirectUri = origin + (import.meta.env.BASE_URL?.replace(/\/$/, '') || '') + '/auth/discord/callback';
       const res = await fetch(`${BASE}/api/auth/discord/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
       if (!res.ok) {
         const data = await res.json() as { error?: string };

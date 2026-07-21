@@ -27,7 +27,7 @@ export default function DiscordCallback() {
     }
 
     const redirectUri =
-      window.location.origin + BASE + '/auth/discord/callback';
+      window.location.origin.replace(/^http:\/\//, 'https://') + BASE + '/auth/discord/callback';
 
     fetch(`${BASE}/api/auth/discord/exchange`, {
       method: 'POST',
