@@ -1,72 +1,83 @@
 import { useLocation } from 'wouter';
-import { Check, Zap, Shield, ArrowRight, X } from 'lucide-react';
+import { Check, X, ArrowRight, ArrowLeft, Zap, Shield, Bot } from 'lucide-react';
 
 const PLANS = [
   {
-    id: 'free',
     name: 'Free',
     price: '$0',
-    period: '/mo',
-    description: 'Try Lumora out. Bot goes offline for 10 min every 6 hours.',
+    period: '/month',
+    description: 'Try Lumora out. Great for development and testing.',
     accent: '#6b7280',
-    accentBg: 'rgba(107,114,128,0.06)',
-    accentBorder: 'rgba(107,114,128,0.15)',
-    cta: 'Get Started Free',
     featured: false,
     features: [
-      { text: '1 project', included: true },
-      { text: '6h continuous uptime (restarts required)', included: true },
-      { text: '100 MB storage', included: true },
-      { text: 'Node.js, Python, Java runtimes', included: true },
-      { text: 'AI crash repair (3 attempts)', included: true },
-      { text: 'Live console logs', included: true },
-      { text: 'Always-on hosting', included: false },
-      { text: 'Priority support', included: false },
+      { text: '1 project', ok: true },
+      { text: '256 MB RAM',  ok: true },
+      { text: 'Node.js & Python runtimes', ok: true },
+      { text: 'AI crash repair (3 attempts)', ok: true },
+      { text: 'Live console logs', ok: true },
+      { text: 'In-browser file editor', ok: true },
+      { text: 'Always-on 24/7 uptime', ok: false },
+      { text: 'Priority support', ok: false },
     ],
   },
   {
-    id: 'pro',
     name: 'Pro',
     price: '$5',
-    period: '/mo',
-    description: 'For serious bots that need 24/7 uptime and more resources.',
-    accent: '#6366f1',
-    accentBg: 'rgba(99,102,241,0.08)',
-    accentBorder: 'rgba(99,102,241,0.25)',
-    cta: 'Start Pro',
+    period: '/month',
+    description: 'For bots that need to stay online 24/7 without interruption.',
+    accent: '#8b5cf6',
     featured: true,
     features: [
-      { text: '1 project', included: true },
-      { text: 'Always-on 24/7 hosting', included: true },
-      { text: '512 MB storage', included: true },
-      { text: 'Node.js, Python, Java runtimes', included: true },
-      { text: 'AI crash repair (3 attempts)', included: true },
-      { text: 'Live console logs', included: true },
-      { text: 'GitHub auto-deploy', included: true },
-      { text: 'Priority support', included: false },
+      { text: '3 projects', ok: true },
+      { text: '512 MB RAM', ok: true },
+      { text: 'All runtimes (Node, Python, Java)', ok: true },
+      { text: 'AI crash repair (unlimited)', ok: true },
+      { text: 'Live console logs', ok: true },
+      { text: 'In-browser file editor', ok: true },
+      { text: 'Always-on 24/7 uptime', ok: true },
+      { text: 'Email support', ok: true },
     ],
   },
   {
-    id: 'business',
     name: 'Business',
     price: '$15',
-    period: '/mo',
-    description: 'Run a fleet of bots with maximum storage and dedicated support.',
+    period: '/month',
+    description: 'Run a fleet of bots with maximum resources and dedicated support.',
     accent: '#a78bfa',
-    accentBg: 'rgba(167,139,250,0.06)',
-    accentBorder: 'rgba(167,139,250,0.15)',
-    cta: 'Start Business',
     featured: false,
     features: [
-      { text: 'Up to 5 projects', included: true },
-      { text: 'Always-on 24/7 hosting', included: true },
-      { text: '2 GB storage', included: true },
-      { text: 'Node.js, Python, Java runtimes', included: true },
-      { text: 'AI crash repair (unlimited)', included: true },
-      { text: 'Live console logs', included: true },
-      { text: 'GitHub auto-deploy', included: true },
-      { text: 'Priority + dedicated support', included: true },
+      { text: 'Unlimited projects', ok: true },
+      { text: '2 GB RAM per bot', ok: true },
+      { text: 'All runtimes', ok: true },
+      { text: 'AI crash repair (unlimited)', ok: true },
+      { text: 'Live console logs', ok: true },
+      { text: 'In-browser file editor', ok: true },
+      { text: 'Always-on 24/7 uptime', ok: true },
+      { text: 'Priority dedicated support', ok: true },
     ],
+  },
+];
+
+const FAQ = [
+  {
+    q: 'What happens when my bot crashes on the free plan?',
+    a: 'Lumora automatically restarts it instantly. If it keeps crashing, the AI repair system reads the logs and patches the code — up to 3 times on the free plan, unlimited on Pro and Business.',
+  },
+  {
+    q: 'What runtimes are supported?',
+    a: 'Node.js, Python, Java, and more. Lumora auto-detects your runtime from package.json, requirements.txt, or your start command. No configuration needed.',
+  },
+  {
+    q: 'Can I upgrade or downgrade my plan at any time?',
+    a: 'Yes. You can switch plans at any time from the admin panel. Changes take effect immediately with prorated billing.',
+  },
+  {
+    q: 'Is my bot\'s code safe?',
+    a: 'Every bot runs in a fully isolated sandbox with no cross-user access. Your environment variables and tokens are encrypted at rest.',
+  },
+  {
+    q: 'How do I get access?',
+    a: 'Lumora is invite-only right now. Contact the admin or join the Discord server to request a hosting key. Once you have a key, sign in with Discord and you\'re in.',
   },
 ];
 
@@ -74,120 +85,157 @@ export default function Pricing() {
   const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen bg-[#080810] text-[#c8cde8]">
-      {/* Background glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 w-[900px] h-[400px] -translate-x-1/2 opacity-[0.07]"
-          style={{ background: 'radial-gradient(ellipse, #6366f1 0%, transparent 70%)' }} />
+    <div className="min-h-screen text-white" style={{ background: '#09090f' }}>
+      {/* Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-15"
+          style={{ background: 'radial-gradient(ellipse, #7c3aed 0%, transparent 65%)', filter: 'blur(60px)' }} />
+        <div className="absolute inset-0 opacity-[0.15]"
+          style={{ backgroundImage: 'radial-gradient(rgba(139,92,246,0.4) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
       </div>
 
       {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between h-14 px-6 md:px-14 border-b border-white/[0.05]">
-        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5">
-          <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain opacity-90" />
-          <span className="font-mono font-bold text-sm tracking-[0.2em] text-white/90">LUMORA</span>
-        </button>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setLocation('/login')} className="px-4 py-1.5 text-xs font-mono text-white/60 rounded-lg border border-white/[0.10] hover:border-white/[0.2] hover:text-white transition-all">
-            Login
-          </button>
-          <button onClick={() => setLocation('/login')} className="px-4 py-1.5 text-xs font-semibold text-white rounded-lg transition-all hover:opacity-90" style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)' }}>
-            Sign Up Free
-          </button>
-        </div>
-      </nav>
-
-      {/* Content */}
-      <div className="relative z-10 max-w-5xl mx-auto px-6 md:px-14 py-20">
-        <div className="text-center mb-16">
-          <p className="font-mono text-[9px] tracking-[0.35em] text-[#6366f1]/50 mb-3">PLANS & PRICING</p>
-          <h1 className="text-5xl font-black text-white mb-4 tracking-tight">Simple, honest pricing.</h1>
-          <p className="text-white/40 text-sm max-w-md mx-auto">
-            Start free. Upgrade when your bot needs to stay online 24/7.
-          </p>
-        </div>
-
-        {/* Plan cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
-          {PLANS.map((plan) => (
-            <div key={plan.id}
-              className="relative rounded-2xl p-6 flex flex-col"
-              style={{
-                background: plan.featured ? 'linear-gradient(145deg, #0f0f20, #0c0c1a)' : 'rgba(255,255,255,0.02)',
-                border: `1px solid ${plan.accentBorder}`,
-                boxShadow: plan.featured ? `0 0 40px ${plan.accent}18` : 'none',
-              }}
-            >
-              {plan.featured && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full text-[9px] font-bold font-mono tracking-widest text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)' }}>
-                    MOST POPULAR
-                  </span>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-3xl font-black text-white">{plan.price}</span>
-                  <span className="text-sm text-white/30 font-mono">{plan.period}</span>
-                </div>
-                <h3 className="font-bold text-lg text-white/90 mb-1">{plan.name}</h3>
-                <p className="text-xs text-white/35 leading-relaxed">{plan.description}</p>
-              </div>
-
-              <div className="flex-1 space-y-2 mb-6">
-                {plan.features.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2.5">
-                    {f.included
-                      ? <Check className="h-3.5 w-3.5 shrink-0" style={{ color: plan.accent }} />
-                      : <X className="h-3.5 w-3.5 shrink-0 text-white/15" />
-                    }
-                    <span className={`text-xs font-mono ${f.included ? 'text-white/55' : 'text-white/20'}`}>{f.text}</span>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setLocation('/login')}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
-                style={{
-                  background: plan.featured ? 'linear-gradient(135deg, #6366f1, #7c3aed)' : plan.accentBg,
-                  border: `1px solid ${plan.accentBorder}`,
-                  color: plan.featured ? '#ffffff' : plan.accent,
-                }}
-              >
-                {plan.cta}
-              </button>
+      <header className="relative z-40 border-b border-white/[0.06]"
+        style={{ background: 'rgba(9,9,15,0.92)', backdropFilter: 'blur(16px)' }}>
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <button onClick={() => setLocation('/')} className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
+              <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain brightness-200" />
             </div>
-          ))}
+            <span className="font-bold text-[15px] text-white">Lumora</span>
+          </button>
+          <button onClick={() => setLocation('/login')}
+            className="h-8 px-4 rounded-lg text-[13px] font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 12px rgba(124,58,237,0.35)' }}>
+            Get started free
+          </button>
         </div>
+      </header>
+
+      <main className="relative z-10">
+        {/* Header */}
+        <section className="py-20 text-center px-6">
+          <p className="text-[11px] font-semibold tracking-widest text-violet-400/60 uppercase mb-4">Pricing</p>
+          <h1 className="text-[48px] md:text-[56px] font-black tracking-tight text-white mb-5">
+            Simple, honest pricing.
+          </h1>
+          <p className="text-[17px] text-white/40 max-w-md mx-auto leading-relaxed">
+            Start for free. Upgrade when you need always-on hosting. No surprises.
+          </p>
+        </section>
+
+        {/* Plans */}
+        <section className="max-w-6xl mx-auto px-6 pb-24">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {PLANS.map((plan) => (
+              <div key={plan.name}
+                className={`relative rounded-2xl p-6 flex flex-col border transition-all duration-300 hover:-translate-y-1 ${
+                  plan.featured ? 'border-violet-500/30' : 'border-white/[0.07]'
+                }`}
+                style={{
+                  background: plan.featured
+                    ? 'linear-gradient(145deg, rgba(139,92,246,0.08) 0%, rgba(99,102,241,0.04) 100%)'
+                    : 'linear-gradient(145deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%)',
+                  boxShadow: plan.featured ? '0 0 0 1px rgba(139,92,246,0.2)' : 'none',
+                }}>
+                {plan.featured && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-widest text-white"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
+                    MOST POPULAR
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <h2 className="font-bold text-white text-[16px] mb-1">{plan.name}</h2>
+                  <p className="text-[12px] text-white/35 mb-5 leading-relaxed">{plan.description}</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[40px] font-black text-white leading-none">{plan.price}</span>
+                    <span className="text-[13px] text-white/30">{plan.period}</span>
+                  </div>
+                </div>
+
+                <ul className="space-y-2.5 mb-8 flex-1">
+                  {plan.features.map(({ text, ok }) => (
+                    <li key={text} className="flex items-center gap-2.5">
+                      {ok
+                        ? <Check className="h-4 w-4 shrink-0" style={{ color: plan.accent }} />
+                        : <X className="h-4 w-4 shrink-0 text-white/15" />}
+                      <span className={`text-[13px] ${ok ? 'text-white/60' : 'text-white/22'}`}>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button onClick={() => setLocation('/login')}
+                  className={`w-full py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px ${
+                    plan.featured ? 'text-white' : 'text-white/55 border border-white/[0.08] hover:border-white/[0.16] hover:text-white/75'
+                  }`}
+                  style={plan.featured ? {
+                    background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                    boxShadow: '0 4px 16px rgba(124,58,237,0.35)',
+                  } : { background: 'rgba(255,255,255,0.04)' }}>
+                  Get started
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Feature highlights */}
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              { icon: Bot,    title: 'AI crash repair on every plan', desc: 'All plans include automatic AI-powered crash analysis and code repair. No manual debugging required.' },
+              { icon: Shield, title: 'Your code is always private',   desc: 'Every bot runs in a fully isolated container. No shared processes, no cross-user data access.' },
+              { icon: Zap,    title: 'Deploy in under 60 seconds',    desc: 'Upload a ZIP, paste a GitHub URL, or connect a repo. Dependencies install automatically in the background.' },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="p-5 rounded-2xl border border-white/[0.05]"
+                style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.18)' }}>
+                  <Icon className="h-4.5 w-4.5 text-violet-400/80" />
+                </div>
+                <h3 className="font-semibold text-white/80 text-[13px] mb-1.5">{title}</h3>
+                <p className="text-[12px] text-white/35 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* FAQ */}
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-xl font-bold text-white/80 text-center mb-8 font-mono tracking-wide">Frequently asked</h2>
-          {[
-            { q: 'What happens when my free bot goes offline?', a: 'After 6 hours of continuous runtime, your bot is automatically paused for 10 minutes. You can restart it manually at any time from your portal — or upgrade to Pro for 24/7 uptime.' },
-            { q: 'What runtimes do you support?', a: 'Node.js (discord.js, Sapphire, Eris), Python (discord.py, py-cord, hikari), and Java (JDA, Javacord, D4J). All dependency installation is handled automatically.' },
-            { q: 'What happens if my bot crashes?', a: 'Our AI repair engine analyses the crash logs and attempts up to 3 automatic fixes. If it can\'t repair it, you\'ll see the full crash log in your console.' },
-            { q: 'How do I deploy my bot?', a: 'Upload a ZIP file or import directly from a public GitHub repository. Lumora detects your runtime, installs dependencies, and starts your bot in under a minute.' },
-          ].map(({ q, a }, i) => (
-            <div key={i} className="border-b border-white/[0.06] py-5">
-              <h3 className="font-semibold text-white/70 text-sm mb-2">{q}</h3>
-              <p className="text-xs text-white/35 leading-relaxed">{a}</p>
+        <section className="border-t border-white/[0.05] py-24" style={{ background: 'rgba(255,255,255,0.01)' }}>
+          <div className="max-w-2xl mx-auto px-6">
+            <h2 className="text-3xl font-black text-white tracking-tight mb-12 text-center">Frequently asked questions</h2>
+            <div className="space-y-6">
+              {FAQ.map(({ q, a }) => (
+                <div key={q} className="border-b border-white/[0.05] pb-6 last:border-0 last:pb-0">
+                  <h3 className="font-semibold text-white/80 text-[14px] mb-2">{q}</h3>
+                  <p className="text-[13px] text-white/40 leading-relaxed">{a}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-20 text-center px-6">
+          <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Ready to get started?</h2>
+          <p className="text-white/38 text-[15px] mb-8">Deploy your first bot for free — no credit card required.</p>
+          <button onClick={() => setLocation('/login')}
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-semibold text-white transition-all hover:-translate-y-px"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 6px 24px rgba(124,58,237,0.4)' }}>
+            Deploy your bot free <ArrowRight className="h-4 w-4" />
+          </button>
+        </section>
+      </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.04] px-6 md:px-14 py-7 mt-10">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="font-mono text-[10px] text-white/18 tracking-[0.25em]">LUMORA</span>
-          <p className="text-[10px] text-white/15 font-mono">© 2025 Lumora · Secure Discord Bot Hosting</p>
-          <div className="flex items-center gap-5 text-[10px] text-white/22 font-mono">
-            <button onClick={() => setLocation('/')} className="hover:text-white/50">Home</button>
-            <button onClick={() => setLocation('/login')} className="hover:text-white/50">Login</button>
-          </div>
+      <footer className="border-t border-white/[0.05] py-8">
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
+          <button onClick={() => setLocation('/')}
+            className="flex items-center gap-1.5 text-[12px] text-white/25 hover:text-white/50 transition-colors">
+            <ArrowLeft className="h-3 w-3" />
+            Back to home
+          </button>
+          <p className="text-[12px] text-white/18">© 2025 Lumora. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
-import { MessageSquare, KeyRound, ArrowLeft, Loader2, AlertTriangle, ExternalLink, Shield } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, KeyRound, MessageSquare } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,30 +9,25 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
-const redeemSchema = z.object({
-  key: z.string().min(1, 'Access key is required'),
-});
+const redeemSchema = z.object({ key: z.string().min(1, 'Access key is required') });
 type RedeemFormValues = z.infer<typeof redeemSchema>;
 
-const DISCORD_INVITE = 'https://discord.gg/4wEKPrgZmD';
-
-function getErrorMessage(code: string | null): { text: string; isAdmin?: boolean } | null {
+function getErrorMsg(code: string | null): { text: string; admin?: boolean } | null {
   if (!code) return null;
-  const map: Record<string, { text: string; isAdmin?: boolean }> = {
-    no_ticket: { text: 'Your Discord account isn\'t linked to any hosting plan. If you\'re the platform admin, issue yourself a key from the admin panel first.', isAdmin: true },
+  const map: Record<string, { text: string; admin?: boolean }> = {
+    no_ticket:      { text: 'Your Discord account isn\'t linked to any hosting plan. Ask the admin to issue you a key first.', admin: true },
     discord_denied: { text: 'Discord authorization was cancelled.' },
-    oauth_failed: { text: 'Discord authentication failed. Please try again.' },
-    no_access: { text: 'Your Discord account isn\'t linked to any hosting plan. Contact staff to get a key.' },
-    key_expired: { text: 'Your hosting access has expired. Contact staff to renew.' },
+    oauth_failed:   { text: 'Discord sign-in failed. Please try again.' },
+    no_access:      { text: 'Your Discord account isn\'t linked to any hosting plan. Contact staff.' },
+    key_expired:    { text: 'Your hosting access has expired. Contact staff to renew.' },
   };
-  return map[code] ?? null;
+  return map[code] ?? { text: 'Something went wrong. Please try again.' };
 }
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const search = useSearch();
-  const params = new URLSearchParams(search);
-  const urlError = params.get('error');
+  const urlError = new URLSearchParams(search).get('error');
 
   const [mode, setMode] = useState<'discord' | 'key'>('discord');
   const [discordLoading, setDiscordLoading] = useState(false);
@@ -51,17 +46,17 @@ export default function Login() {
     setDiscordError(null);
     try {
       const origin = window.location.origin.replace(/^http:\/\//, 'https://');
-      const redirectUri = origin + (import.meta.env.BASE_URL?.replace(/\/$/, '') || '') + '/auth/discord/callback';
+      const redirectUri = origin + BASE + '/auth/discord/callback';
       const res = await fetch(`${BASE}/api/auth/discord/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
       if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        throw new Error(data.error || 'Discord OAuth not configured');
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error || 'Discord OAuth not configured');
       }
       const { url } = await res.json() as { url: string };
       window.location.href = url;
     } catch (err: any) {
       setDiscordLoading(false);
-      setDiscordError(err?.message || 'Discord login failed. Please try again or use an access key.');
+      setDiscordError(err?.message || 'Discord login failed. Try again or use an access key.');
     }
   };
 
@@ -71,203 +66,140 @@ export default function Login() {
       { data: { key: data.key } },
       {
         onSuccess: () => setLocation('/dashboard'),
-        onError: (err: any) => {
-          setKeyError(err?.data?.error || err?.error || 'Invalid or expired access key.');
-        },
+        onError: (err: any) => setKeyError(err?.data?.error || err?.error || 'Invalid or expired access key.'),
       }
     );
   };
 
+  const errorInfo = getErrorMsg(urlError);
+
   return (
-    <div className="relative min-h-[100dvh] w-full flex items-center justify-center p-4 overflow-hidden bg-[#080810] animate-page-in">
+    <div className="min-h-[100dvh] w-full flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: '#09090f' }}>
       {/* Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Grid texture */}
-        <div className="absolute inset-0 opacity-[0.022]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(99,102,241,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.8) 1px, transparent 1px)`,
-            backgroundSize: '56px 56px',
-          }}
-        />
-        {/* Central glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] rounded-full opacity-[0.08]"
-          style={{ background: 'radial-gradient(ellipse, #6366f1 0%, transparent 70%)' }}
-        />
-        {/* Corner accents */}
-        <div className="absolute top-0 left-0 w-64 h-64 opacity-[0.03]"
-          style={{ background: 'radial-gradient(ellipse at top left, #6366f1, transparent 60%)' }}
-        />
-        <div className="absolute bottom-0 right-0 w-64 h-64 opacity-[0.03]"
-          style={{ background: 'radial-gradient(ellipse at bottom right, #a78bfa, transparent 60%)' }}
-        />
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.15]"
+          style={{ backgroundImage: 'radial-gradient(rgba(139,92,246,0.5) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(ellipse, #7c3aed 0%, transparent 70%)', filter: 'blur(60px)' }} />
       </div>
 
-      {/* Back to home */}
-      <button
-        onClick={() => setLocation('/')}
-        className="absolute top-5 left-5 flex items-center gap-1.5 text-[11px] font-mono text-white/25 hover:text-white/55 transition-colors duration-200"
-      >
+      {/* Back link */}
+      <button onClick={() => setLocation('/')}
+        className="absolute top-5 left-5 flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60 transition-colors">
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to home
+        Back
       </button>
 
-      <div className="relative w-full max-w-sm space-y-6">
-        {/* Logo block */}
-        <div className="text-center space-y-3">
-          <div className="flex justify-center mb-5">
-            <div className="relative">
-              <img
-                src="/lumora-brand.png"
-                alt="Lumora"
-                className="h-20 w-20 object-contain"
-                style={{ filter: 'drop-shadow(0 0 24px rgba(99,102,241,0.35))' }}
-              />
-            </div>
+      <div className="relative w-full max-w-[380px]">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl mb-4"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 8px 32px rgba(124,58,237,0.35)' }}>
+            <img src="/lumora-brand.png" alt="" className="h-7 w-7 object-contain brightness-200" />
           </div>
-          <h1 className="text-3xl font-black tracking-[0.18em] text-white font-mono">
-            LUMORA
-          </h1>
-          <p className="text-[10px] font-mono tracking-[0.3em] text-white/28">HOSTING PORTAL</p>
+          <h1 className="text-[22px] font-bold text-white tracking-tight">Sign in to Lumora</h1>
+          <p className="text-[13px] text-white/38 mt-1">
+            {mode === 'discord' ? 'Use your Discord account to access your bot dashboard.' : 'Enter your staff-issued access key.'}
+          </p>
         </div>
 
-        {/* Error from OAuth redirect */}
-        {urlError && getErrorMessage(urlError) && (() => {
-          const err = getErrorMessage(urlError)!;
-          return (
-            <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-red-500/20 bg-red-500/[0.07]">
-              <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
-              <div className="space-y-1.5">
-                <p className="text-xs text-red-300/70 font-mono leading-relaxed">{err.text}</p>
-                {err.isAdmin && (
-                  <a
-                    href="/admin"
-                    className="inline-flex items-center gap-1 text-[11px] font-mono text-[#6366f1]/70 hover:text-[#6366f1] transition-colors underline underline-offset-2"
-                  >
-                    Go to Admin Panel →
-                  </a>
-                )}
-              </div>
+        {/* OAuth error banner */}
+        {errorInfo && (
+          <div className="mb-4 flex items-start gap-3 p-3.5 rounded-xl border border-red-500/20 bg-red-500/[0.06]">
+            <AlertTriangle className="h-4 w-4 text-red-400/70 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[12px] text-red-300/75 leading-relaxed">{errorInfo.text}</p>
+              {errorInfo.admin && (
+                <a href="/admin" className="inline-block mt-1.5 text-[11px] text-violet-400/70 hover:text-violet-400 underline underline-offset-2 transition-colors">
+                  Go to Admin Panel →
+                </a>
+              )}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
-        {/* Main card */}
-        <div
-          className="rounded-2xl border border-white/[0.08] bg-white/[0.025] backdrop-blur-xl p-6 space-y-4 relative overflow-hidden"
-          style={{ boxShadow: '0 0 0 1px rgba(99,102,241,0.06) inset, 0 32px 64px rgba(0,0,0,0.6)' }}
-        >
-          {/* Top accent line */}
+        {/* Card */}
+        <div className="rounded-2xl border border-white/[0.08] p-6 relative overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.025)', boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }}>
           <div className="absolute top-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent)' }}
-          />
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)' }} />
 
           {mode === 'discord' ? (
-            <div className="space-y-5">
-              <div className="text-center space-y-1 pb-1">
-                <h2 className="text-sm font-bold text-white/85 tracking-wide">Sign in to your portal</h2>
-                <p className="text-[12px] text-white/35">Use your Discord account to access your hosted bot.</p>
-              </div>
-
-              <button
-                onClick={handleDiscordLogin}
-                disabled={discordLoading}
-                className="w-full flex items-center justify-center gap-3 h-14 rounded-xl text-base font-bold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
-                style={{
-                  background: 'linear-gradient(135deg, #5865F2 0%, #4752C4 100%)',
-                  boxShadow: '0 4px 20px rgba(88,101,242,0.35)',
-                }}
-              >
-                {discordLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <MessageSquare className="h-5 w-5" />
+            <div className="space-y-4">
+              {/* Discord button */}
+              <button onClick={handleDiscordLogin} disabled={discordLoading}
+                className="w-full h-12 flex items-center justify-center gap-3 rounded-xl text-[14px] font-semibold text-white transition-all hover:-translate-y-px disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
+                style={{ background: 'linear-gradient(135deg, #5865F2, #4752C4)', boxShadow: '0 4px 16px rgba(88,101,242,0.35)' }}>
+                {discordLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.01.043.027.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+                  </svg>
                 )}
-                {discordLoading ? 'Redirecting to Discord…' : 'Continue with Discord'}
+                {discordLoading ? 'Redirecting…' : 'Continue with Discord'}
               </button>
 
               {discordError && (
-                <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-red-500/20 bg-red-500/[0.06]">
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-red-500/20 bg-red-500/[0.06]">
                   <AlertTriangle className="h-3.5 w-3.5 text-red-400/70 shrink-0 mt-0.5" />
-                  <p className="text-[11px] font-mono text-red-300/70 leading-relaxed">{discordError}</p>
+                  <p className="text-[11px] text-red-300/70 leading-relaxed">{discordError}</p>
                 </div>
               )}
 
-              <div className="relative flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-white/[0.06]" />
-                <span className="text-[10px] text-white/22 font-mono tracking-widest">OR</span>
+                <span className="text-[11px] text-white/22">or</span>
                 <div className="flex-1 h-px bg-white/[0.06]" />
               </div>
 
-              <button
-                onClick={() => setMode('key')}
-                className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-xs font-mono text-white/35 border border-white/[0.07] hover:border-white/[0.14] hover:text-white/60 hover:bg-white/[0.02] transition-all duration-200"
-              >
+              <button onClick={() => setMode('key')}
+                className="w-full h-10 flex items-center justify-center gap-2 rounded-xl text-[13px] text-white/38 border border-white/[0.07] hover:border-white/[0.14] hover:text-white/60 hover:bg-white/[0.02] transition-all">
                 <KeyRound className="h-3.5 w-3.5" />
-                Enter access key manually
+                Use an access key
               </button>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-2.5 pb-1">
-                <button
-                  onClick={() => { setMode('discord'); setKeyError(null); }}
-                  className="text-white/30 hover:text-white/60 transition-colors"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-                <div>
-                  <h2 className="text-sm font-bold text-white/85">Enter access key</h2>
-                  <p className="text-[11px] text-white/30 font-mono">Staff-issued keys only.</p>
-                </div>
-              </div>
+              <button onClick={() => { setMode('discord'); setKeyError(null); }}
+                className="flex items-center gap-1.5 text-[12px] text-white/32 hover:text-white/60 transition-colors mb-2">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Discord sign-in
+              </button>
 
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onKeySubmit)} className="space-y-3">
-                  <FormField
-                    control={form.control}
-                    name="key"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <div className="relative">
-                            <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25" />
-                            <input
-                              {...field}
-                              placeholder="XXXX-XXXX-XXXX-XXXX"
-                              className="w-full pl-10 pr-4 h-12 rounded-xl border border-white/[0.08] bg-white/[0.03] font-mono text-sm tracking-widest text-center text-white/80 uppercase placeholder:text-white/18 placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:border-[#6366f1]/40 focus:ring-1 focus:ring-[#6366f1]/15 transition-all duration-200"
-                              autoComplete="off"
-                              spellCheck={false}
-                              data-testid="input-access-key"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={form.control} name="key" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25" />
+                          <input {...field}
+                            placeholder="XXXX-XXXX-XXXX-XXXX"
+                            className="w-full pl-10 pr-4 h-12 rounded-xl border border-white/[0.08] bg-white/[0.03] font-mono text-[13px] tracking-widest text-center text-white/80 uppercase placeholder:text-white/18 placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/15 transition-all"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
 
                   {keyError && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-red-500/20 bg-red-500/[0.06]">
+                    <div className="flex items-center gap-2 p-3 rounded-xl border border-red-500/20 bg-red-500/[0.06]">
                       <AlertTriangle className="h-3.5 w-3.5 text-red-400/70 shrink-0" />
-                      <p className="text-[11px] font-mono text-red-300/70">{keyError}</p>
+                      <p className="text-[11px] text-red-300/70">{keyError}</p>
                     </div>
                   )}
 
-                  <button
-                    type="submit"
-                    disabled={redeemMutation.isPending}
-                    className="w-full h-12 rounded-xl text-sm font-bold font-mono tracking-[0.12em] text-white transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{
-                      background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)',
-                      boxShadow: redeemMutation.isPending ? 'none' : '0 4px 16px rgba(99,102,241,0.30)',
-                    }}
-                    data-testid="button-activate-key"
-                  >
+                  <button type="submit" disabled={redeemMutation.isPending}
+                    className="w-full h-12 rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 4px 16px rgba(124,58,237,0.3)' }}>
                     {redeemMutation.isPending ? (
                       <span className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" /> VERIFYING…
+                        <Loader2 className="h-4 w-4 animate-spin" /> Verifying…
                       </span>
-                    ) : 'ACTIVATE KEY'}
+                    ) : 'Activate key'}
                   </button>
                 </form>
               </Form>
@@ -275,29 +207,13 @@ export default function Login() {
           )}
         </div>
 
-        {/* Security note */}
-        <div className="flex items-center justify-center gap-2 text-[10px] font-mono text-white/18">
-          <Shield className="h-3 w-3" />
-          <span>Secured with Discord OAuth 2.0</span>
-        </div>
-
         {/* Footer links */}
-        <div className="flex flex-col items-center gap-2.5">
-          <a
-            href={DISCORD_INVITE}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-white/25 hover:text-[#5865F2] transition-colors"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Join our Discord for support
-          </a>
-          <a
-            href="/admin"
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono text-white/15 hover:text-white/40 transition-colors"
-          >
-            <KeyRound className="h-3 w-3" />
-            Admin Panel
+        <div className="mt-5 flex items-center justify-center gap-4">
+          <a href="/admin" className="text-[11px] text-white/20 hover:text-white/45 transition-colors">Admin panel</a>
+          <span className="text-white/12">·</span>
+          <a href="https://discord.gg/4wEKPrgZmD" target="_blank" rel="noreferrer"
+            className="text-[11px] text-white/20 hover:text-white/45 transition-colors">
+            Get support
           </a>
         </div>
       </div>
