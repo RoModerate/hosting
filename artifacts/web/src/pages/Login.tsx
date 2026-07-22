@@ -14,16 +14,15 @@ type RedeemFormValues = z.infer<typeof redeemSchema>;
 function getErrorMsg(code: string | null): { text: string; admin?: boolean } | null {
   if (!code) return null;
   const map: Record<string, { text: string; admin?: boolean }> = {
-    no_ticket:      { text: 'Your Discord account isn\'t linked to any hosting plan. Ask the admin to issue you a key.', admin: true },
+    no_ticket:      { text: "Your Discord account isn't linked to any hosting plan. Ask the admin to issue you a key.", admin: true },
     discord_denied: { text: 'Discord authorization was cancelled.' },
     oauth_failed:   { text: 'Discord sign-in failed. Please try again.' },
-    no_access:      { text: 'Your Discord account isn\'t linked to any hosting plan. Contact staff.' },
+    no_access:      { text: "Your Discord account isn't linked to any hosting plan. Contact staff." },
     key_expired:    { text: 'Your hosting access has expired. Contact staff to renew.' },
   };
   return map[code] ?? { text: 'Something went wrong. Please try again.' };
 }
 
-// Discord SVG icon
 function DiscordIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -79,27 +78,45 @@ export default function Login() {
 
   const errorInfo = getErrorMsg(urlError);
 
+  // Shared dark colors
+  const BG = '#13131f';
+  const CARD = 'rgba(255,255,255,0.04)';
+  const BORDER = 'rgba(255,255,255,0.09)';
+  const TEXT1 = 'rgba(255,255,255,0.88)';
+  const TEXT2 = 'rgba(255,255,255,0.45)';
+  const TEXT3 = 'rgba(255,255,255,0.28)';
+
   return (
-    <div className="min-h-screen flex" style={{ background: '#f6f6f7', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="min-h-screen flex relative overflow-hidden" style={{ background: BG, fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Grid */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)`,
+        backgroundSize: '40px 40px',
+      }} />
+      {/* Glow */}
+      <div className="absolute pointer-events-none" style={{
+        top: '-100px', left: '-100px', width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
+        borderRadius: '50%',
+      }} />
+
       {/* Left panel — branding */}
-      <div className="hidden lg:flex w-[420px] shrink-0 flex-col bg-white border-r border-gray-200 px-12 py-14">
-        {/* Logo */}
-        <button onClick={() => setLocation('/')} className="flex items-center gap-3 group mb-16">
-          <div className="h-9 w-9 rounded-[10px] overflow-hidden flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform" style={{ background: '#0c0c14' }}>
-            <img src="/lumora-brand.png" alt="Lumora" className="h-8 w-8 object-contain" />
-          </div>
-          <span className="font-bold text-[18px] text-gray-900 tracking-tight">Lumora</span>
+      <div className="hidden lg:flex relative z-10 w-[400px] shrink-0 flex-col px-12 py-14"
+        style={{ borderRight: `1px solid ${BORDER}` }}>
+        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 group mb-16">
+          <img src="/lumora-brand.png" alt="Lumora" className="h-7 w-7 object-contain"
+            style={{ filter: 'drop-shadow(0 0 8px rgba(124,58,237,0.5))' }} />
+          <span className="font-bold text-[17px]" style={{ color: TEXT1 }}>Lumora</span>
         </button>
 
         <div className="flex-1">
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-3 leading-tight">
+          <h2 className="text-[1.9rem] font-black leading-tight mb-3" style={{ color: TEXT1, letterSpacing: '-0.03em' }}>
             Host your bot.<br />Stay online 24/7.
           </h2>
-          <p className="text-[15px] text-gray-500 leading-relaxed mb-10">
+          <p className="text-[14.5px] leading-relaxed mb-10" style={{ color: TEXT2 }}>
             Deploy any Discord bot in under 60 seconds. Automatic restarts, live logs, and AI crash repair — all included.
           </p>
 
-          {/* Feature list */}
           <div className="space-y-4">
             {[
               { icon: '⚡', label: 'Deploy in 60 seconds', sub: 'ZIP upload or GitHub import' },
@@ -108,61 +125,67 @@ export default function Login() {
               { icon: '📡', label: 'Live console logs', sub: 'Real-time stdout in browser' },
             ].map(({ icon, label, sub }) => (
               <div key={label} className="flex items-start gap-3">
-                <span className="text-lg leading-none mt-0.5">{icon}</span>
+                <span className="text-base leading-none mt-0.5">{icon}</span>
                 <div>
-                  <p className="text-[13.5px] font-semibold text-gray-700">{label}</p>
-                  <p className="text-[12px] text-gray-400">{sub}</p>
+                  <p className="text-[13px] font-semibold" style={{ color: TEXT1 }}>{label}</p>
+                  <p className="text-[12px]" style={{ color: TEXT3 }}>{sub}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="text-[12px] text-gray-300 mt-12">© 2025 Lumora Hosting</p>
+        <p className="text-[11.5px]" style={{ color: TEXT3 }}>© 2025 Lumora Hosting</p>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex flex-col">
+      <div className="relative z-10 flex-1 flex flex-col">
         {/* Mobile top bar */}
-        <div className="lg:hidden bg-white border-b border-gray-200 px-5 h-14 flex items-center justify-between">
+        <div className="lg:hidden h-14 px-5 flex items-center justify-between"
+          style={{ borderBottom: `1px solid ${BORDER}` }}>
           <button onClick={() => setLocation('/')} className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-[7px] overflow-hidden flex items-center justify-center shrink-0" style={{ background: '#0c0c14' }}>
-              <img src="/lumora-brand.png" alt="Lumora" className="h-5 w-5 object-contain" />
-            </div>
-            <span className="font-bold text-[15px] text-gray-900">Lumora</span>
+            <img src="/lumora-brand.png" alt="Lumora" className="h-5 w-5 object-contain"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.5))' }} />
+            <span className="font-bold text-[15px]" style={{ color: TEXT1 }}>Lumora</span>
           </button>
-          <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-gray-800 transition-colors">
+          <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 text-[13px] transition-colors"
+            style={{ color: TEXT2 }}
+            onMouseEnter={e => (e.currentTarget.style.color = TEXT1)}
+            onMouseLeave={e => (e.currentTarget.style.color = TEXT2)}>
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
         </div>
 
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-[400px]">
+          <div className="w-full max-w-[380px]">
 
-            {/* Mobile logo (only visible on mobile) */}
-            <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-              <div className="h-12 w-12 rounded-2xl overflow-hidden flex items-center justify-center" style={{ background: '#0c0c14' }}>
-                <img src="/lumora-brand.png" alt="Lumora" className="h-10 w-10 object-contain" />
-              </div>
+            {/* Mobile logo */}
+            <div className="lg:hidden flex justify-center mb-8">
+              <img src="/lumora-brand.png" alt="Lumora" className="h-14 w-14 object-contain"
+                style={{ filter: 'drop-shadow(0 0 20px rgba(124,58,237,0.5))' }} />
             </div>
 
-            <div className="mb-8">
-              <h1 className="text-[26px] font-black text-gray-900 tracking-tight mb-1.5">
+            <div className="mb-7">
+              <h1 className="text-[24px] font-black mb-1.5" style={{ color: TEXT1, letterSpacing: '-0.02em' }}>
                 {mode === 'discord' ? 'Sign in' : 'Access key'}
               </h1>
-              <p className="text-[14px] text-gray-500">
-                {mode === 'discord' ? 'Connect your Discord account to access your dashboard.' : 'Enter the key issued by your hosting admin.'}
+              <p className="text-[13.5px]" style={{ color: TEXT2 }}>
+                {mode === 'discord'
+                  ? 'Connect your Discord account to access your portal.'
+                  : 'Enter the key issued by your hosting admin.'}
               </p>
             </div>
 
             {/* URL error banner */}
             {errorInfo && (
-              <div className="mb-5 flex items-start gap-3 p-4 rounded-xl border border-red-200 bg-red-50">
-                <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="mb-5 flex items-start gap-3 p-4 rounded-xl"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: '#f87171' }} />
                 <div>
-                  <p className="text-[13px] text-red-700 leading-relaxed">{errorInfo.text}</p>
+                  <p className="text-[12.5px] leading-relaxed" style={{ color: '#fca5a5' }}>{errorInfo.text}</p>
                   {errorInfo.admin && (
-                    <a href="/admin" className="inline-block mt-1.5 text-[12px] text-violet-600 hover:text-violet-800 underline underline-offset-2">
+                    <a href="/admin" className="inline-block mt-1.5 text-[12px] underline underline-offset-2"
+                      style={{ color: '#a78bfa' }}>
                       Go to Admin Panel →
                     </a>
                   )}
@@ -172,43 +195,45 @@ export default function Login() {
 
             {mode === 'discord' ? (
               <div className="space-y-3">
-                {/* Big Discord CTA */}
+                {/* Discord CTA */}
                 <button onClick={handleDiscordLogin} disabled={discordLoading}
-                  className="group w-full h-[52px] flex items-center justify-between gap-3 rounded-2xl text-[15px] font-semibold text-white transition-all hover:opacity-95 hover:-translate-y-px hover:shadow-lg disabled:opacity-60 disabled:translate-y-0 disabled:cursor-not-allowed px-5"
-                  style={{ background: '#5865F2', boxShadow: '0 2px 16px rgba(88,101,242,0.35)' }}>
+                  className="group w-full h-[50px] flex items-center justify-between gap-3 rounded-xl text-[14.5px] font-semibold text-white transition-all hover:opacity-95 hover:-translate-y-px hover:shadow-lg disabled:opacity-60 disabled:translate-y-0 disabled:cursor-not-allowed px-5"
+                  style={{ background: '#5865F2', boxShadow: '0 2px 20px rgba(88,101,242,0.3)' }}>
                   <span className="flex items-center gap-3">
                     {discordLoading
                       ? <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-                      : <DiscordIcon className="h-5 w-5 shrink-0" />
-                    }
+                      : <DiscordIcon className="h-5 w-5 shrink-0" />}
                     {discordLoading ? 'Redirecting to Discord…' : 'Continue with Discord'}
                   </span>
                   {!discordLoading && <ChevronRight className="h-4 w-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />}
                 </button>
 
                 {discordError && (
-                  <div className="flex items-start gap-2.5 p-3.5 rounded-xl border border-red-200 bg-red-50">
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-[12.5px] text-red-700 leading-relaxed">{discordError}</p>
+                  <div className="flex items-start gap-2.5 p-3.5 rounded-xl"
+                    style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: '#f87171' }} />
+                    <p className="text-[12.5px] leading-relaxed" style={{ color: '#fca5a5' }}>{discordError}</p>
                   </div>
                 )}
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 py-1">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-[11px] text-gray-400 font-medium">OR</span>
-                  <div className="flex-1 h-px bg-gray-200" />
+                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <span className="text-[11px] font-medium" style={{ color: TEXT3 }}>OR</span>
+                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
                 </div>
 
-                {/* Access key option */}
+                {/* Access key */}
                 <button onClick={() => setMode('key')}
-                  className="w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13.5px] font-medium text-gray-600 border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all">
-                  <KeyRound className="h-3.5 w-3.5 text-gray-400" />
+                  className="w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13.5px] font-medium transition-all hover:-translate-y-px"
+                  style={{ color: TEXT2, border: `1px solid ${BORDER}`, background: CARD }}
+                  onMouseEnter={e => { e.currentTarget.style.color = TEXT1; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = TEXT2; e.currentTarget.style.borderColor = BORDER; }}>
+                  <KeyRound className="h-3.5 w-3.5" />
                   Use an access key
                 </button>
 
-                {/* Info note */}
-                <p className="text-[11px] text-gray-400 text-center leading-relaxed pt-1">
+                <p className="text-[11px] text-center leading-relaxed pt-1" style={{ color: TEXT3 }}>
                   Discord OAuth must be configured by your admin.<br />
                   No account? Contact staff to get an access key.
                 </p>
@@ -216,7 +241,10 @@ export default function Login() {
             ) : (
               <div className="space-y-4">
                 <button onClick={() => { setMode('discord'); setKeyError(null); }}
-                  className="flex items-center gap-1.5 text-[12.5px] text-gray-500 hover:text-gray-800 transition-colors">
+                  className="flex items-center gap-1.5 text-[12.5px] transition-colors"
+                  style={{ color: TEXT2 }}
+                  onMouseEnter={e => (e.currentTarget.style.color = TEXT1)}
+                  onMouseLeave={e => (e.currentTarget.style.color = TEXT2)}>
                   <ArrowLeft className="h-3.5 w-3.5" /> Back to Discord sign-in
                 </button>
 
@@ -226,10 +254,17 @@ export default function Login() {
                       <FormItem>
                         <FormControl>
                           <div className="relative">
-                            <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: TEXT3 }} />
                             <input {...field}
                               placeholder="XXXX-XXXX-XXXX-XXXX"
-                              className="w-full pl-11 pr-4 h-[52px] rounded-2xl border border-gray-200 bg-white font-mono text-[14px] tracking-widest text-center text-gray-800 uppercase placeholder:text-gray-300 placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all shadow-sm"
+                              className="w-full pl-11 pr-4 h-[50px] rounded-xl font-mono text-[14px] tracking-widest text-center uppercase placeholder:normal-case placeholder:tracking-normal transition-all outline-none"
+                              style={{
+                                background: CARD,
+                                border: `1px solid ${BORDER}`,
+                                color: TEXT1,
+                              }}
+                              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.1)'; }}
+                              onBlur={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = 'none'; }}
                               autoComplete="off" spellCheck={false} />
                           </div>
                         </FormControl>
@@ -237,14 +272,15 @@ export default function Login() {
                       </FormItem>
                     )} />
                     {keyError && (
-                      <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-red-200 bg-red-50">
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                        <p className="text-[12.5px] text-red-700">{keyError}</p>
+                      <div className="flex items-center gap-2.5 p-3.5 rounded-xl"
+                        style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" style={{ color: '#f87171' }} />
+                        <p className="text-[12.5px]" style={{ color: '#fca5a5' }}>{keyError}</p>
                       </div>
                     )}
                     <button type="submit" disabled={redeemMutation.isPending}
-                      className="w-full h-[52px] rounded-2xl text-[14px] font-semibold text-white transition-all disabled:opacity-60 hover:opacity-90 hover:-translate-y-px hover:shadow-md"
-                      style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 14px rgba(124,58,237,0.3)' }}>
+                      className="w-full h-[50px] rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-60 hover:opacity-90 hover:-translate-y-px"
+                      style={{ background: '#7c3aed', boxShadow: '0 2px 16px rgba(124,58,237,0.3)' }}>
                       {redeemMutation.isPending
                         ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</span>
                         : 'Activate key'}
@@ -255,11 +291,15 @@ export default function Login() {
             )}
 
             {/* Footer links */}
-            <div className="mt-8 flex items-center justify-center gap-5 pt-5 border-t border-gray-200">
-              <a href="/admin" className="text-[12px] text-gray-400 hover:text-gray-700 transition-colors">Admin panel</a>
-              <span className="h-3 w-px bg-gray-200" />
+            <div className="mt-8 flex items-center justify-center gap-5 pt-5" style={{ borderTop: `1px solid ${BORDER}` }}>
+              <a href="/admin" className="text-[12px] transition-colors" style={{ color: TEXT3 }}
+                onMouseEnter={e => (e.currentTarget.style.color = TEXT2)}
+                onMouseLeave={e => (e.currentTarget.style.color = TEXT3)}>Admin panel</a>
+              <span className="h-3 w-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
               <a href="https://discord.gg/4wEKPrgZmD" target="_blank" rel="noreferrer"
-                className="text-[12px] text-gray-400 hover:text-gray-700 transition-colors">Get support</a>
+                className="text-[12px] transition-colors" style={{ color: TEXT3 }}
+                onMouseEnter={e => (e.currentTarget.style.color = TEXT2)}
+                onMouseLeave={e => (e.currentTarget.style.color = TEXT3)}>Get support</a>
             </div>
           </div>
         </div>

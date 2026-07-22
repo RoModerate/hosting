@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -46,13 +46,15 @@ export default function DiscordCallback() {
   if (errorMsg) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-6"
-        style={{ background: '#f6f6f7', fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div className="h-12 w-12 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
-          <AlertTriangle className="h-5 w-5 text-red-500" />
+        style={{ background: '#13131f', fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div className="h-12 w-12 rounded-2xl flex items-center justify-center"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <AlertTriangle className="h-5 w-5" style={{ color: '#f87171' }} />
         </div>
-        <p className="text-[14px] text-gray-600 font-medium">{errorMsg}</p>
+        <p className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>{errorMsg}</p>
         <button onClick={() => setLocation('/login')}
-          className="mt-2 px-5 py-2 rounded-xl text-[13px] text-gray-600 border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all">
+          className="mt-2 px-5 py-2 rounded-xl text-[13px] transition-all hover:-translate-y-px"
+          style={{ color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}>
           Back to login
         </button>
       </div>
@@ -61,18 +63,32 @@ export default function DiscordCallback() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5"
-      style={{ background: '#f6f6f7', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* Animated logo */}
-      <div className="relative">
-        <div className="h-16 w-16 rounded-3xl flex items-center justify-center" style={{ background: '#0c0c14' }}>
-          <img src="/lumora-brand.png" alt="Lumora" className="h-12 w-12 object-contain" />
+      style={{ background: '#13131f', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Grid */}
+      <div className="fixed inset-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)`,
+        backgroundSize: '40px 40px',
+      }} />
+      {/* Glow */}
+      <div className="fixed pointer-events-none" style={{
+        top: '-100px', left: '-100px', width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
+        borderRadius: '50%',
+      }} />
+
+      <div className="relative z-10 flex flex-col items-center gap-5">
+        {/* Spinning logo */}
+        <div className="relative">
+          <img src="/lumora-brand.png" alt="Lumora" className="h-16 w-16 object-contain"
+            style={{ filter: 'drop-shadow(0 0 24px rgba(124,58,237,0.5))' }} />
+          {/* Spinner ring */}
+          <div className="absolute -inset-2 rounded-full border-2 border-transparent border-t-violet-500"
+            style={{ animation: 'spin 1s linear infinite' }} />
         </div>
-        {/* Spinner ring */}
-        <div className="absolute -inset-1.5 rounded-[28px] border-2 border-transparent border-t-violet-400 animate-spin" />
-      </div>
-      <div className="text-center">
-        <p className="text-[15px] font-semibold text-gray-800 mb-1">Signing you in…</p>
-        <p className="text-[12.5px] text-gray-400">Verifying your Discord account</p>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold mb-1" style={{ color: 'rgba(255,255,255,0.85)' }}>Signing you in…</p>
+          <p className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Verifying your Discord account</p>
+        </div>
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
