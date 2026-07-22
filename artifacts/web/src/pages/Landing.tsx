@@ -14,259 +14,208 @@ interface SessionData {
   ownerUsername?: string;
 }
 
-// ─── Sidebar nav data ──────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
-    id: 'getting-started',
-    label: 'Getting Started',
-    icon: Play,
-    items: ['Introduction', 'Quick Start', 'Dashboard Overview', 'Connect Discord'],
-    defaultOpen: true,
+    id: 'getting-started', label: 'Getting Started', icon: Play,
+    items: ['Introduction', 'Quick Start', 'Dashboard Overview', 'Connect Discord'], defaultOpen: true,
   },
   {
-    id: 'features',
-    label: 'Features',
-    icon: Layers,
-    items: ['AI Crash Repair', 'Auto Restart', 'Live Console Logs', 'File Manager', 'Environment Variables'],
-    defaultOpen: false,
+    id: 'features', label: 'Features', icon: Layers,
+    items: ['AI Crash Repair', 'Auto Restart', 'Live Console Logs', 'File Manager', 'Environment Variables'], defaultOpen: false,
   },
   {
-    id: 'runtimes',
-    label: 'Runtimes',
-    icon: Cpu,
-    items: ['Node.js', 'Python', 'Java'],
-    defaultOpen: false,
+    id: 'runtimes', label: 'Runtimes', icon: Cpu,
+    items: ['Node.js', 'Python', 'Java'], defaultOpen: false,
   },
   {
-    id: 'billing',
-    label: 'Billing',
-    icon: Server,
-    items: ['Plans & Pricing', 'Usage Limits', 'Upgrade'],
-    defaultOpen: false,
+    id: 'billing', label: 'Billing', icon: Server,
+    items: ['Plans & Pricing', 'Usage Limits', 'Upgrade'], defaultOpen: false,
   },
 ];
 
-// ─── SVG Illustrations ─────────────────────────────────────────────────────────
-function RocketSVG() {
-  return (
-    <svg viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-      <defs>
-        <pattern id="rg" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(124,58,237,0.18)" strokeWidth="0.7"/>
-        </pattern>
-      </defs>
-      <rect width="320" height="200" fill="url(#rg)"/>
-      {/* Rocket body */}
-      <ellipse cx="160" cy="100" rx="32" ry="54" fill="rgba(124,58,237,0.18)" stroke="rgba(124,58,237,0.45)" strokeWidth="1.5"/>
-      {/* Nose */}
-      <path d="M 160 46 L 128 100 L 192 100 Z" fill="rgba(124,58,237,0.3)" stroke="rgba(124,58,237,0.55)" strokeWidth="1.5"/>
-      {/* Left wing */}
-      <path d="M 128 112 L 95 152 L 128 132 Z" fill="rgba(99,102,241,0.28)" stroke="rgba(99,102,241,0.5)" strokeWidth="1"/>
-      {/* Right wing */}
-      <path d="M 192 112 L 225 152 L 192 132 Z" fill="rgba(99,102,241,0.28)" stroke="rgba(99,102,241,0.5)" strokeWidth="1"/>
-      {/* Flame outer */}
-      <ellipse cx="160" cy="162" rx="16" ry="24" fill="rgba(251,146,60,0.35)" stroke="rgba(251,146,60,0.5)" strokeWidth="1"/>
-      {/* Flame inner */}
-      <ellipse cx="160" cy="168" rx="9" ry="14" fill="rgba(253,224,71,0.4)"/>
-      {/* Window */}
-      <circle cx="160" cy="96" r="13" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5"/>
-      <circle cx="160" cy="96" r="6" fill="rgba(255,255,255,0.22)"/>
-      {/* Stars */}
-      <circle cx="70" cy="55" r="2" fill="rgba(255,255,255,0.4)"/>
-      <circle cx="255" cy="72" r="1.5" fill="rgba(255,255,255,0.3)"/>
-      <circle cx="85" cy="145" r="1.5" fill="rgba(255,255,255,0.25)"/>
-      <circle cx="275" cy="130" r="2" fill="rgba(255,255,255,0.35)"/>
-    </svg>
-  );
-}
+// ─── Clean geometric SVG illustrations ───────────────────────────────────────
+// Inspired by Mintlify's monoline style — thin violet strokes, no fills
 
-function DeploySVG() {
+function IlluDeploy() {
   return (
-    <svg viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      {/* Grid */}
       <defs>
-        <pattern id="dg" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(99,102,241,0.18)" strokeWidth="0.7"/>
+        <pattern id="g1" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(124,58,237,0.07)" strokeWidth="0.5"/>
         </pattern>
       </defs>
-      <rect width="320" height="200" fill="url(#dg)"/>
-      {/* Terminal window */}
-      <rect x="52" y="38" width="178" height="126" rx="10" fill="rgba(10,10,30,0.42)" stroke="rgba(99,102,241,0.4)" strokeWidth="1.5"/>
-      {/* Title bar */}
-      <rect x="52" y="38" width="178" height="30" rx="10" fill="rgba(20,18,50,0.6)"/>
-      <rect x="52" y="55" width="178" height="13" fill="rgba(20,18,50,0.6)"/>
-      <circle cx="74" cy="53" r="5" fill="rgba(239,68,68,0.5)"/>
-      <circle cx="92" cy="53" r="5" fill="rgba(251,191,36,0.5)"/>
-      <circle cx="110" cy="53" r="5" fill="rgba(34,197,94,0.5)"/>
+      <rect width="280" height="160" fill="url(#g1)"/>
+
+      {/* Terminal card */}
+      <rect x="48" y="28" width="150" height="104" rx="10" fill="white" stroke="rgba(124,58,237,0.2)" strokeWidth="1.5"/>
+      {/* Title bar dots */}
+      <circle cx="66" cy="44" r="3.5" fill="rgba(239,68,68,0.4)"/>
+      <circle cx="78" cy="44" r="3.5" fill="rgba(251,191,36,0.4)"/>
+      <circle cx="90" cy="44" r="3.5" fill="rgba(34,197,94,0.4)"/>
+      <line x1="48" y1="54" x2="198" y2="54" stroke="rgba(124,58,237,0.1)" strokeWidth="1"/>
       {/* Code lines */}
-      <rect x="68" y="78" width="92" height="6" rx="3" fill="rgba(167,139,250,0.7)"/>
-      <rect x="68" y="92" width="130" height="6" rx="3" fill="rgba(255,255,255,0.18)"/>
-      <rect x="68" y="106" width="78" height="6" rx="3" fill="rgba(99,102,241,0.55)"/>
-      <rect x="68" y="120" width="108" height="6" rx="3" fill="rgba(255,255,255,0.14)"/>
-      <rect x="68" y="134" width="60" height="6" rx="3" fill="rgba(34,197,94,0.5)"/>
-      {/* Cursor blink */}
-      <rect x="68" y="148" width="8" height="8" rx="1.5" fill="rgba(167,139,250,0.8)"/>
+      <rect x="62" y="66" width="70" height="5" rx="2.5" fill="rgba(124,58,237,0.35)"/>
+      <rect x="62" y="78" width="100" height="5" rx="2.5" fill="rgba(124,58,237,0.12)"/>
+      <rect x="62" y="90" width="56" height="5" rx="2.5" fill="rgba(99,102,241,0.4)"/>
+      <rect x="62" y="102" width="84" height="5" rx="2.5" fill="rgba(124,58,237,0.1)"/>
+      <rect x="62" y="114" width="40" height="5" rx="2.5" fill="rgba(34,197,94,0.4)"/>
+      {/* Cursor */}
+      <rect x="62" y="124" width="6" height="6" rx="1" fill="rgba(124,58,237,0.7)">
+        <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite"/>
+      </rect>
+
       {/* Arrow */}
-      <path d="M 238 101 L 278 101" stroke="rgba(124,58,237,0.55)" strokeWidth="2.5" strokeDasharray="5 3"/>
-      <path d="M 273 94 L 280 101 L 273 108" stroke="rgba(124,58,237,0.8)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      {/* Cloud */}
-      <ellipse cx="295" cy="93" rx="22" ry="16" fill="rgba(124,58,237,0.18)" stroke="rgba(124,58,237,0.45)" strokeWidth="1.5"/>
-      <ellipse cx="281" cy="99" rx="15" ry="11" fill="rgba(124,58,237,0.15)" stroke="rgba(124,58,237,0.4)" strokeWidth="1.5"/>
-      <ellipse cx="305" cy="101" rx="12" ry="9" fill="rgba(124,58,237,0.15)" stroke="rgba(124,58,237,0.4)" strokeWidth="1.5"/>
+      <path d="M 206 80 L 228 80" stroke="rgba(124,58,237,0.5)" strokeWidth="1.5" strokeDasharray="4 3"/>
+      <path d="M 224 75 L 230 80 L 224 85" stroke="rgba(124,58,237,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+
+      {/* Cloud shape (outline) */}
+      <path d="M 250 72 a14 14 0 0 1 0 28 H 238 a10 10 0 0 1 0-20 a14 14 0 0 1 12-8z"
+        fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.35)" strokeWidth="1.5"/>
     </svg>
   );
 }
 
-function BotSVG() {
+function IlluZap() {
   return (
-    <svg viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
       <defs>
-        <pattern id="bg2" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="0.7"/>
+        <pattern id="g2" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(99,102,241,0.07)" strokeWidth="0.5"/>
         </pattern>
       </defs>
-      <rect width="320" height="200" fill="url(#bg2)"/>
-      {/* Bot head */}
-      <rect x="110" y="52" width="100" height="96" rx="16" fill="rgba(124,58,237,0.18)" stroke="rgba(124,58,237,0.5)" strokeWidth="1.5"/>
-      {/* Eyes */}
-      <rect x="128" y="80" width="22" height="16" rx="5" fill="rgba(124,58,237,0.55)" stroke="rgba(167,139,250,0.7)" strokeWidth="1"/>
-      <rect x="170" y="80" width="22" height="16" rx="5" fill="rgba(124,58,237,0.55)" stroke="rgba(167,139,250,0.7)" strokeWidth="1"/>
-      {/* Eye glints */}
-      <rect x="132" y="84" width="5" height="4" rx="1.5" fill="rgba(255,255,255,0.75)"/>
-      <rect x="174" y="84" width="5" height="4" rx="1.5" fill="rgba(255,255,255,0.75)"/>
-      {/* Mouth */}
-      <path d="M 134 118 Q 160 132 186 118" stroke="rgba(167,139,250,0.8)" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      {/* Antenna */}
-      <line x1="160" y1="52" x2="160" y2="32" stroke="rgba(124,58,237,0.55)" strokeWidth="2"/>
-      <circle cx="160" cy="27" r="7" fill="rgba(124,58,237,0.25)" stroke="rgba(124,58,237,0.6)" strokeWidth="1.5"/>
-      {/* Side panels */}
-      <rect x="94" y="80" width="16" height="32" rx="6" fill="rgba(99,102,241,0.18)" stroke="rgba(99,102,241,0.4)" strokeWidth="1"/>
-      <rect x="210" y="80" width="16" height="32" rx="6" fill="rgba(99,102,241,0.18)" stroke="rgba(99,102,241,0.4)" strokeWidth="1"/>
-      {/* Sparkles */}
-      <path d="M 62 62 L 65 72 L 75 75 L 65 78 L 62 88 L 59 78 L 49 75 L 59 72 Z" fill="rgba(251,191,36,0.5)" stroke="rgba(251,191,36,0.55)" strokeWidth="0.5"/>
-      <path d="M 252 48 L 254 56 L 262 58 L 254 60 L 252 68 L 250 60 L 242 58 L 250 56 Z" fill="rgba(251,191,36,0.4)" stroke="rgba(251,191,36,0.5)" strokeWidth="0.5"/>
-      <path d="M 265 125 L 267 131 L 273 133 L 267 135 L 265 141 L 263 135 L 257 133 L 263 131 Z" fill="rgba(167,139,250,0.55)" strokeWidth="0.5"/>
+      <rect width="280" height="160" fill="url(#g2)"/>
+
+      {/* Hexagon */}
+      <polygon points="140,28 172,46 172,82 140,100 108,82 108,46"
+        fill="rgba(124,58,237,0.04)" stroke="rgba(124,58,237,0.25)" strokeWidth="1.5"/>
+
+      {/* Bolt */}
+      <path d="M 148 44 L 132 78 L 142 78 L 132 116 L 158 72 L 146 72 Z"
+        fill="rgba(124,58,237,0.12)" stroke="rgba(124,58,237,0.55)" strokeWidth="1.5"
+        strokeLinejoin="round"/>
+
+      {/* Orbit rings */}
+      <ellipse cx="140" cy="64" rx="52" ry="18" fill="none" stroke="rgba(124,58,237,0.12)" strokeWidth="1" strokeDasharray="3 4"/>
+      <ellipse cx="140" cy="64" rx="70" ry="26" fill="none" stroke="rgba(99,102,241,0.09)" strokeWidth="1" strokeDasharray="3 6"/>
+
+      {/* Dots on rings */}
+      <circle cx="188" cy="64" r="3" fill="rgba(124,58,237,0.4)"/>
+      <circle cx="92" cy="64" r="3" fill="rgba(99,102,241,0.35)"/>
+      <circle cx="140" cy="38" r="2.5" fill="rgba(124,58,237,0.3)"/>
     </svg>
   );
 }
 
-function ConsoleSVG() {
+function IlluShield() {
   return (
-    <svg viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
       <defs>
-        <pattern id="cg" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(79,70,229,0.15)" strokeWidth="0.7"/>
+        <pattern id="g3" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(124,58,237,0.07)" strokeWidth="0.5"/>
         </pattern>
       </defs>
-      <rect width="320" height="200" fill="url(#cg)"/>
-      {/* Outer monitor */}
-      <rect x="42" y="28" width="236" height="144" rx="12" fill="rgba(8,8,22,0.55)" stroke="rgba(79,70,229,0.4)" strokeWidth="1.5"/>
-      {/* Title bar */}
-      <rect x="42" y="28" width="236" height="34" rx="12" fill="rgba(15,12,38,0.7)"/>
-      <rect x="42" y="49" width="236" height="13" fill="rgba(15,12,38,0.7)"/>
-      <circle cx="66" cy="45" r="5.5" fill="rgba(239,68,68,0.5)"/>
-      <circle cx="85" cy="45" r="5.5" fill="rgba(251,191,36,0.5)"/>
-      <circle cx="104" cy="45" r="5.5" fill="rgba(34,197,94,0.5)"/>
-      {/* Online badge */}
-      <rect x="224" y="36" width="42" height="17" rx="8.5" fill="rgba(34,197,94,0.12)" stroke="rgba(34,197,94,0.3)" strokeWidth="1"/>
-      <circle cx="234" cy="44.5" r="3" fill="rgba(34,197,94,0.85)"/>
-      <text x="240" y="48" fontSize="7" fontFamily="monospace" fill="rgba(34,197,94,0.9)">LIVE</text>
-      {/* Log lines */}
-      <text x="58" y="82" fontSize="8.5" fontFamily="monospace" fill="rgba(167,139,250,0.9)">$ node index.js</text>
-      <text x="58" y="97" fontSize="8.5" fontFamily="monospace" fill="rgba(124,58,237,0.75)">▸ Connecting to gateway…</text>
-      <text x="58" y="112" fontSize="8.5" fontFamily="monospace" fill="rgba(34,197,94,0.85)">✓ MyBot#1234 is online</text>
-      <text x="58" y="127" fontSize="8.5" fontFamily="monospace" fill="rgba(255,255,255,0.28)">/help → cooluser (38ms)</text>
-      <text x="58" y="142" fontSize="8.5" fontFamily="monospace" fill="rgba(255,255,255,0.22)">/play → user_two (21ms)</text>
-      {/* Blinking cursor */}
-      <rect x="58" y="152" width="7" height="10" rx="1.5" fill="rgba(124,58,237,0.85)">
-        <animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/>
+      <rect width="280" height="160" fill="url(#g3)"/>
+
+      {/* Shield */}
+      <path d="M 140 24 L 176 38 L 176 76 C 176 104 140 124 140 124 C 140 124 104 104 104 76 L 104 38 Z"
+        fill="rgba(124,58,237,0.06)" stroke="rgba(124,58,237,0.3)" strokeWidth="1.5" strokeLinejoin="round"/>
+
+      {/* Check inside */}
+      <path d="M 124 72 L 134 84 L 156 60" stroke="rgba(124,58,237,0.7)" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+
+      {/* Radiating lines */}
+      <line x1="80" y1="50" x2="96" y2="58" stroke="rgba(124,58,237,0.18)" strokeWidth="1"/>
+      <line x1="70" y1="76" x2="90" y2="76" stroke="rgba(124,58,237,0.14)" strokeWidth="1"/>
+      <line x1="200" y1="50" x2="184" y2="58" stroke="rgba(124,58,237,0.18)" strokeWidth="1"/>
+      <line x1="210" y1="76" x2="190" y2="76" stroke="rgba(124,58,237,0.14)" strokeWidth="1"/>
+      <line x1="140" y1="14" x2="140" y2="22" stroke="rgba(124,58,237,0.18)" strokeWidth="1"/>
+
+      {/* Corner dots */}
+      <circle cx="72" cy="48" r="2" fill="rgba(124,58,237,0.25)"/>
+      <circle cx="208" cy="48" r="2" fill="rgba(99,102,241,0.25)"/>
+      <circle cx="140" cy="138" r="2" fill="rgba(124,58,237,0.2)"/>
+    </svg>
+  );
+}
+
+function IlluLogs() {
+  return (
+    <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <defs>
+        <pattern id="g4" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(79,70,229,0.07)" strokeWidth="0.5"/>
+        </pattern>
+      </defs>
+      <rect width="280" height="160" fill="url(#g4)"/>
+
+      {/* Monitor outline */}
+      <rect x="56" y="26" width="168" height="110" rx="10" fill="white" stroke="rgba(79,70,229,0.22)" strokeWidth="1.5"/>
+      <line x1="56" y1="46" x2="224" y2="46" stroke="rgba(79,70,229,0.1)" strokeWidth="1"/>
+      <circle cx="73" cy="36" r="3.5" fill="rgba(239,68,68,0.35)"/>
+      <circle cx="85" cy="36" r="3.5" fill="rgba(251,191,36,0.35)"/>
+      <circle cx="97" cy="36" r="3.5" fill="rgba(34,197,94,0.35)"/>
+
+      {/* Live badge */}
+      <rect x="180" y="30" width="32" height="12" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.4)" strokeWidth="1"/>
+      <circle cx="188" cy="36" r="2.5" fill="rgba(34,197,94,0.9)"/>
+      <text x="193" y="39.5" fontSize="6" fontFamily="monospace" fill="rgba(34,197,94,0.9)">LIVE</text>
+
+      {/* Log lines with varying widths */}
+      <rect x="70" y="58" width="88" height="5" rx="2.5" fill="rgba(124,58,237,0.5)"/>
+      <rect x="70" y="70" width="128" height="5" rx="2.5" fill="rgba(124,58,237,0.12)"/>
+      <rect x="70" y="82" width="108" height="5" rx="2.5" fill="rgba(34,197,94,0.4)"/>
+      <rect x="70" y="94" width="72" height="5" rx="2.5" fill="rgba(124,58,237,0.1)"/>
+      <rect x="70" y="106" width="96" height="5" rx="2.5" fill="rgba(124,58,237,0.1)"/>
+      <rect x="70" y="118" width="56" height="5" rx="2.5" fill="rgba(239,68,68,0.4)"/>
+
+      {/* Cursor blink */}
+      <rect x="70" y="128" width="5" height="7" rx="1" fill="rgba(124,58,237,0.8)">
+        <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
       </rect>
     </svg>
   );
 }
 
-// ─── Hub cards ─────────────────────────────────────────────────────────────────
+// ─── Hub cards ────────────────────────────────────────────────────────────────
 const HUB_CARDS = [
-  {
-    title: 'Quick Start',
-    desc: 'Deploy your first Discord bot in under five minutes.',
-    illu: <RocketSVG />,
-    gradient: 'from-violet-600/20 via-violet-500/10 to-transparent',
-    border: 'border-violet-200/60',
-    action: '/login',
-  },
-  {
-    title: 'Upload & Deploy',
-    desc: 'Upload a ZIP or paste a GitHub URL — dependencies install automatically.',
-    illu: <DeploySVG />,
-    gradient: 'from-indigo-600/20 via-indigo-500/10 to-transparent',
-    border: 'border-indigo-200/60',
-    action: '/login',
-  },
-  {
-    title: 'AI Crash Repair',
-    desc: 'Lumora reads crash logs and patches your code. Up to 3 auto-fix attempts.',
-    illu: <BotSVG />,
-    gradient: 'from-purple-600/20 via-purple-500/10 to-transparent',
-    border: 'border-purple-200/60',
-    action: '/login',
-  },
-  {
-    title: 'Live Console',
-    desc: 'Stream, search, and filter your bot\'s stdout in the browser. No SSH.',
-    illu: <ConsoleSVG />,
-    gradient: 'from-blue-600/20 via-blue-500/10 to-transparent',
-    border: 'border-blue-200/60',
-    action: '/login',
-  },
+  { title: 'Quick Start', desc: 'Deploy your first Discord bot in under five minutes.', illu: <IlluDeploy />, accent: '#7c3aed', action: '/login' },
+  { title: 'Always-On Hosting', desc: '24/7 uptime with auto-restart and exponential backoff.', illu: <IlluZap />, accent: '#6366f1', action: '/pricing' },
+  { title: 'Secure Sandboxing', desc: 'Every bot runs isolated — env vars encrypted at rest.', illu: <IlluShield />, accent: '#8b5cf6', action: '/login' },
+  { title: 'Live Console', desc: 'Stream, search and filter stdout in the browser. No SSH.', illu: <IlluLogs />, accent: '#4f46e5', action: '/login' },
 ];
 
-// ─── Quick path links ──────────────────────────────────────────────────────────
 const QUICK_PATHS = [
-  { icon: Zap,      label: 'Get live in 60 seconds',    sub: 'Fastest path to a running bot' },
-  { icon: Bot,      label: 'Set up AI crash repair',    sub: 'Automatic code patching on crash' },
-  { icon: Shield,   label: 'Secure your environment',   sub: 'Isolated sandbox & env variables' },
-  { icon: Activity, label: 'Monitor with live logs',    sub: 'Real-time console streaming' },
-  { icon: Code2,    label: 'Edit files in-browser',     sub: 'Syntax-highlighted file manager' },
-  { icon: RotateCw, label: 'Configure auto-restart',    sub: 'Exponential backoff on crashes' },
+  { icon: Zap,      label: 'Get live in 60 seconds',  sub: 'Fastest path to a running bot' },
+  { icon: Bot,      label: 'Set up AI crash repair',  sub: 'Automatic code patching on crash' },
+  { icon: Shield,   label: 'Secure your environment', sub: 'Isolated sandbox + encrypted vars' },
+  { icon: Activity, label: 'Monitor with live logs',  sub: 'Real-time console streaming' },
+  { icon: Code2,    label: 'Edit files in-browser',   sub: 'Syntax-highlighted file manager' },
+  { icon: RotateCw, label: 'Configure auto-restart',  sub: 'Exponential backoff on crashes' },
 ];
 
-// ─── Sidebar section ───────────────────────────────────────────────────────────
-function SidebarSection({
-  section,
-  activeItem,
-  onItemClick,
-}: {
-  section: typeof NAV_SECTIONS[0];
-  activeItem: string;
-  onItemClick: (s: string) => void;
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function SidebarSection({ section, activeItem, onItemClick }: {
+  section: typeof NAV_SECTIONS[0]; activeItem: string; onItemClick: (s: string) => void;
 }) {
   const [open, setOpen] = useState(section.defaultOpen);
   const Icon = section.icon;
-
   return (
-    <div className="mb-1">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors group"
-      >
+    <div className="mb-0.5">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors group">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1 text-left tracking-wide uppercase text-[10.5px]">{section.label}</span>
-        {open
-          ? <ChevronDown className="h-3 w-3 text-gray-400 group-hover:text-gray-600 transition-colors" />
-          : <ChevronRight className="h-3 w-3 text-gray-400 group-hover:text-gray-600 transition-colors" />}
+        <span className="flex-1 text-left tracking-wide uppercase text-[10px]">{section.label}</span>
+        {open ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronRight className="h-3 w-3 text-gray-400" />}
       </button>
       {open && (
         <div className="mt-0.5 ml-2 border-l border-gray-200 pl-3">
           {section.items.map(item => (
-            <button
-              key={item}
-              onClick={() => onItemClick(item)}
+            <button key={item} onClick={() => onItemClick(item)}
               className={`w-full text-left px-2 py-1.5 rounded-md text-[12.5px] transition-colors ${
-                activeItem === item
-                  ? 'text-violet-700 font-medium bg-violet-50'
-                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-              }`}
-            >
+                activeItem === item ? 'text-violet-700 font-medium bg-violet-50' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+              }`}>
               {item}
             </button>
           ))}
@@ -276,40 +225,26 @@ function SidebarSection({
   );
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({ activeItem, onItemClick }: { activeItem: string; onItemClick: (s: string) => void }) {
   return (
     <aside className="w-60 shrink-0 flex flex-col gap-0.5 pr-4 pt-6 pb-10">
-      {/* Label */}
-      <div className="flex items-center gap-2 px-3 mb-4">
-        <div className="h-5 w-5 rounded-md flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
-          <img src="/lumora-brand.png" alt="" className="h-3 w-3 object-contain brightness-200" onError={e => (e.currentTarget.style.display = 'none')} />
+      <div className="flex items-center gap-2.5 px-3 mb-5">
+        <div className="h-5 w-5 rounded-md overflow-hidden flex items-center justify-center shrink-0" style={{ background: '#0c0c14' }}>
+          <img src="/lumora-brand.png" alt="Lumora" className="h-4 w-4 object-contain" />
         </div>
         <span className="text-[12px] font-semibold text-gray-500 tracking-wide">Lumora Docs</span>
       </div>
-
-      {NAV_SECTIONS.map(section => (
-        <SidebarSection
-          key={section.id}
-          section={section}
-          activeItem={activeItem}
-          onItemClick={onItemClick}
-        />
+      {NAV_SECTIONS.map(s => (
+        <SidebarSection key={s.id} section={s} activeItem={activeItem} onItemClick={onItemClick} />
       ))}
-
-      {/* Resources */}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Resources</p>
         {[
           { label: 'Discord Server', icon: '💬' },
           { label: 'Status Page', icon: '🟢' },
-          { label: 'Changelog', icon: '📋' },
         ].map(({ label, icon }) => (
-          <button key={label}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[12.5px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors">
-            <span className="text-xs">{icon}</span>
-            {label}
+          <button key={label} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[12.5px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors">
+            <span className="text-xs">{icon}</span>{label}
           </button>
         ))}
       </div>
@@ -318,70 +253,51 @@ function Sidebar({ activeItem, onItemClick }: { activeItem: string; onItemClick:
 }
 
 // ─── Top Nav ──────────────────────────────────────────────────────────────────
-function TopNav({
-  session,
-  onLogin,
-  sidebarOpen,
-  setSidebarOpen,
-}: {
-  session: SessionData | null;
-  onLogin: () => void;
-  sidebarOpen: boolean;
-  setSidebarOpen: (v: boolean) => void;
+function TopNav({ session, onLogin, sidebarOpen, setSidebarOpen }: {
+  session: SessionData | null; onLogin: () => void; sidebarOpen: boolean; setSidebarOpen: (v: boolean) => void;
 }) {
   const [, setLocation] = useLocation();
   const avatarUrl = session?.discord?.avatar && session.discord.id
     ? `https://cdn.discordapp.com/avatars/${session.discord.id}/${session.discord.avatar}.webp?size=64`
     : null;
-
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-      <div className="flex items-center h-14 px-4 gap-4">
-        {/* Mobile hamburger */}
-        <button
-          className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100"
-          onClick={() => setSidebarOpen(!sidebarOpen)}>
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200/70">
+      <div className="flex items-center h-14 px-5 gap-4">
+        <button className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100" onClick={() => setSidebarOpen(!sidebarOpen)}>
           {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </button>
 
         {/* Logo */}
-        <button onClick={() => setLocation('/')} className="flex items-center gap-2 shrink-0">
-          <div className="h-6 w-6 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
-            <img src="/lumora-brand.png" alt="" className="h-3.5 w-3.5 object-contain brightness-200" onError={e => (e.currentTarget.style.display = 'none')} />
+        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0 group">
+          <div className="h-7 w-7 rounded-[8px] overflow-hidden flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform" style={{ background: '#0c0c14' }}>
+            <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain" />
           </div>
           <span className="font-bold text-[15px] text-gray-900 tracking-tight">Lumora</span>
         </button>
 
-        {/* Nav pills */}
+        {/* Nav */}
         <nav className="hidden lg:flex items-center gap-0.5 ml-2">
           {[
             { label: 'Documentation', active: true },
-            { label: 'Features', href: '#features' },
+            { label: 'Features', action: () => {} },
             { label: 'Pricing', action: () => setLocation('/pricing') },
-            { label: 'Changelog' },
-          ].map(({ label, active, href, action }) => (
-            <a
-              key={label}
-              href={href ?? '#'}
-              onClick={e => { if (action) { e.preventDefault(); action(); } }}
-              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
-                active
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+          ].map(({ label, active, action }) => (
+            <button key={label} onClick={action}
+              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                active ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
               }`}>
               {label}
-            </a>
+            </button>
           ))}
         </nav>
 
         {/* Search */}
-        <div className="flex-1 max-w-sm mx-auto hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 cursor-text text-[13px] text-gray-400">
+        <div className="flex-1 max-w-sm mx-auto hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gray-100 border border-gray-200 cursor-text text-[13px] text-gray-400 hover:border-gray-300 transition-colors">
           <Search className="h-3.5 w-3.5 shrink-0" />
-          <span>Search docs…</span>
-          <span className="ml-auto flex items-center gap-0.5 text-[11px] text-gray-400">
-            <kbd className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-mono">⌘</kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-mono">K</kbd>
+          <span className="flex-1">Search docs…</span>
+          <span className="flex items-center gap-0.5 shrink-0">
+            <kbd className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-mono text-gray-500">⌘</kbd>
+            <kbd className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-mono text-gray-500">K</kbd>
           </span>
         </div>
 
@@ -389,26 +305,20 @@ function TopNav({
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {session ? (
             <>
-              <button
-                onClick={() => setLocation('/dashboard')}
+              <button onClick={() => setLocation('/dashboard')}
                 className="hidden sm:flex h-8 px-3.5 items-center gap-1.5 rounded-lg text-[13px] font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors">
                 Dashboard
               </button>
-              <div className="h-7 w-7 rounded-full border-2 border-white ring-1 ring-gray-200 overflow-hidden bg-violet-100 flex items-center justify-center">
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                  : <span className="text-[11px] font-bold text-violet-700">{(session.discord?.username || session.ownerUsername || '?')[0].toUpperCase()}</span>}
+              <div className="h-7 w-7 rounded-full border border-gray-200 overflow-hidden bg-violet-100 flex items-center justify-center">
+                {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] font-bold text-violet-700">{(session.discord?.username || session.ownerUsername || '?')[0].toUpperCase()}</span>}
               </div>
             </>
           ) : (
             <>
+              <button onClick={onLogin} className="hidden sm:block h-8 px-3.5 rounded-lg text-[13px] text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors">Sign in</button>
               <button onClick={onLogin}
-                className="hidden sm:block h-8 px-3.5 rounded-lg text-[13px] text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors border border-transparent">
-                Sign in
-              </button>
-              <button onClick={onLogin}
-                className="h-8 px-4 rounded-lg text-[13px] font-semibold text-white transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 1px 6px rgba(124,58,237,0.3)' }}>
+                className="h-8 px-4 rounded-lg text-[13px] font-semibold text-white transition-all hover:opacity-90 hover:shadow-md"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 1px 8px rgba(124,58,237,0.25)' }}>
                 Get started
               </button>
             </>
@@ -436,13 +346,8 @@ export default function Landing() {
   const goLogin = () => setLocation('/login');
 
   return (
-    <div className="min-h-screen bg-white text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <TopNav
-        session={session}
-        onLogin={goLogin}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-      />
+    <div className="min-h-screen text-gray-900" style={{ background: '#f6f6f7', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <TopNav session={session} onLogin={goLogin} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
@@ -454,17 +359,17 @@ export default function Landing() {
         </div>
       )}
 
-      {/* Body: sidebar + content */}
       <div className="max-w-[1240px] mx-auto px-4 flex">
         {/* Desktop sidebar */}
-        <div className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-gray-100 shrink-0">
+        <div className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-gray-200/60 shrink-0">
           <Sidebar activeItem={activeItem} onItemClick={setActiveItem} />
         </div>
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 px-4 lg:px-12 pt-12 pb-24">
+        <main className="flex-1 min-w-0 px-4 lg:px-14 pt-12 pb-28">
+
           {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-[12.5px] text-gray-400 mb-8">
+          <div className="flex items-center gap-1.5 text-[12.5px] text-gray-400 mb-10">
             <span>Docs</span>
             <ChevronRight className="h-3 w-3" />
             <span>Getting Started</span>
@@ -472,34 +377,56 @@ export default function Landing() {
             <span className="text-gray-700 font-medium">Introduction</span>
           </div>
 
-          {/* Hero heading */}
-          <div className="text-center mb-14 max-w-2xl mx-auto">
-            <h1 className="text-5xl md:text-6xl font-black text-gray-900 tracking-tight mb-5 leading-[1.05]">
+          {/* ── Hero ──────────────────────────────────────────────────────────── */}
+          <div className="max-w-2xl mx-auto text-center mb-16">
+            {/* Big icon in dark badge */}
+            <div className="flex justify-center mb-7">
+              <div className="relative">
+                <div className="h-[88px] w-[88px] rounded-[26px] overflow-hidden flex items-center justify-center"
+                  style={{ background: '#0c0c14', boxShadow: '0 0 0 1px rgba(124,58,237,0.25), 0 8px 32px rgba(0,0,0,0.18), 0 0 60px rgba(124,58,237,0.12)' }}>
+                  <img src="/lumora-brand.png" alt="Lumora" className="h-[72px] w-[72px] object-contain" />
+                </div>
+                {/* Subtle glow ring */}
+                <div className="absolute -inset-1 rounded-[30px] -z-10 blur-xl opacity-40"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }} />
+              </div>
+            </div>
+
+            <h1 className="text-5xl md:text-[60px] font-black text-gray-950 tracking-[-0.03em] mb-5 leading-[1.03]">
               Lumora Hosting
             </h1>
-            <p className="text-[17px] text-gray-500 leading-relaxed">
-              The easiest way to host your Discord bot 24/7. Upload your code,
-              connect your bot token, and go live in under 60 seconds — with AI-powered crash repair built in.
+            <p className="text-[17px] text-gray-500 leading-relaxed max-w-xl mx-auto">
+              The simplest way to keep your Discord bot online 24/7 — upload your code, paste your token, and you're live in under a minute.
             </p>
+
+            <div className="flex items-center justify-center gap-3 mt-8">
+              <button onClick={goLogin}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-semibold text-white transition-all hover:opacity-90 hover:-translate-y-px hover:shadow-lg"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 14px rgba(124,58,237,0.3)' }}>
+                Get started free <ArrowRight className="h-4 w-4" />
+              </button>
+              <button onClick={() => setLocation('/pricing')}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium text-gray-600 border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all">
+                View plans
+              </button>
+            </div>
           </div>
 
-          {/* Hub cards 2×2 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-16 max-w-3xl mx-auto">
-            {HUB_CARDS.map(({ title, desc, illu, border, action }) => (
-              <button
-                key={title}
-                onClick={() => setLocation(action)}
-                className={`group text-left rounded-2xl border ${border} overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 bg-white`}
-                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                {/* Illustration area */}
-                <div className="h-36 overflow-hidden bg-gray-50 relative">
+          {/* ── Hub cards — clean, Mintlify-style ────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-16 max-w-3xl mx-auto">
+            {HUB_CARDS.map(({ title, desc, illu, accent, action }) => (
+              <button key={title} onClick={() => setLocation(action)}
+                className="group text-left rounded-2xl border border-gray-200/80 overflow-hidden bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                {/* Illustration — white bg, monoline violet */}
+                <div className="h-36 overflow-hidden bg-gray-50/80 border-b border-gray-100">
                   {illu}
                 </div>
-                {/* Text area */}
-                <div className="p-5 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-1.5">
+                {/* Text */}
+                <div className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-1">
                     <h3 className="font-semibold text-gray-900 text-[15px]">{title}</h3>
-                    <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-violet-500 group-hover:translate-x-0.5 transition-all" />
+                    <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-violet-500 group-hover:translate-x-0.5 transition-all" />
                   </div>
                   <p className="text-[13px] text-gray-500 leading-relaxed">{desc}</p>
                 </div>
@@ -507,28 +434,23 @@ export default function Landing() {
             ))}
           </div>
 
-          {/* Divider */}
-          <div className="max-w-3xl mx-auto border-t border-gray-100 mb-14" />
+          {/* ── Divider ───────────────────────────────────────────────────────── */}
+          <div className="max-w-3xl mx-auto border-t border-gray-200/60 mb-14" />
 
-          {/* Quick paths */}
+          {/* ── Pick your path ───────────────────────────────────────────────── */}
           <div className="max-w-3xl mx-auto" id="features">
-            <div className="mb-8">
+            <div className="mb-7">
               <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-violet-600 uppercase tracking-widest mb-2">
-                <span className="h-px w-5 bg-violet-300 inline-block" />
-                Pick your path
+                <span className="h-px w-5 bg-violet-300 inline-block" /> Pick your path
               </div>
               <h2 className="text-2xl font-bold text-gray-900">What do you want to do?</h2>
               <p className="text-[14px] text-gray-500 mt-1">Jump to the guide that matches your goal.</p>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {QUICK_PATHS.map(({ icon: Icon, label, sub }) => (
-                <button
-                  key={label}
-                  onClick={goLogin}
-                  className="group flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-violet-300 hover:bg-violet-50/40 transition-all text-left">
-                  <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition-colors"
-                    style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                <button key={label} onClick={goLogin}
+                  className="group flex items-center gap-4 p-4 rounded-xl border border-gray-200 bg-white hover:border-violet-200 hover:bg-violet-50/50 transition-all text-left">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-gray-50 border border-gray-200 group-hover:border-violet-200 group-hover:bg-violet-50 transition-colors">
                     <Icon className="h-4 w-4 text-violet-600" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -541,35 +463,34 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* CTA strip */}
+          {/* ── CTA strip ────────────────────────────────────────────────────── */}
           <div className="max-w-3xl mx-auto mt-16">
-            <div className="rounded-2xl border border-violet-200 p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6"
-              style={{ background: 'linear-gradient(145deg, rgba(124,58,237,0.04) 0%, rgba(99,102,241,0.02) 100%)' }}>
+            <div className="rounded-2xl border border-violet-200/70 p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6 bg-white"
+              style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div className="flex-1">
                 <p className="text-[11px] font-semibold text-violet-600 uppercase tracking-widest mb-1.5">Free forever</p>
-                <h3 className="text-xl font-bold text-gray-900 mb-1.5">Start hosting for free</h3>
-                <p className="text-[13.5px] text-gray-500">One bot, 256 MB RAM, live console logs, and AI crash repair — all on the free plan.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1.5">Start hosting today</h3>
+                <p className="text-[13.5px] text-gray-500">One bot, 256 MB RAM, live console, AI crash repair — no credit card needed.</p>
               </div>
               <div className="flex flex-col gap-2 shrink-0">
                 <button onClick={goLogin}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold text-white transition-all hover:opacity-90 hover:shadow-md"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 12px rgba(124,58,237,0.3)' }}>
-                  Deploy your bot free <ArrowRight className="h-4 w-4" />
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 12px rgba(124,58,237,0.28)' }}>
+                  Deploy your bot <ArrowRight className="h-4 w-4" />
                 </button>
                 <button onClick={() => setLocation('/pricing')}
-                  className="px-5 py-2.5 rounded-xl text-[13.5px] text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 transition-colors text-center">
-                  View all plans
+                  className="px-5 py-2.5 rounded-xl text-[13.5px] text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 transition-colors text-center bg-gray-50">
+                  Compare plans
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Footer nav */}
-          <div className="max-w-3xl mx-auto mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Footer */}
+          <div className="max-w-3xl mx-auto mt-16 pt-8 border-t border-gray-200/60 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-md flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
-                <img src="/lumora-brand.png" alt="" className="h-3 w-3 object-contain brightness-200" onError={e => (e.currentTarget.style.display = 'none')} />
+              <div className="h-4 w-4 rounded-[4px] overflow-hidden flex items-center justify-center" style={{ background: '#0c0c14' }}>
+                <img src="/lumora-brand.png" alt="" className="h-3.5 w-3.5 object-contain" />
               </div>
               <span className="text-[12.5px] text-gray-400 font-medium">Lumora Hosting</span>
             </div>
