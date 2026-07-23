@@ -12,7 +12,6 @@ import type { Command } from "./types.js";
 
 // Import all commands
 import { command as pingCommand } from "./commands/ping.js";
-import hailCommand from './commands/hail.js';
 import { command as helloCommand } from "./commands/hello.js";
 import { command as helpCommand } from "./commands/help.js";
 import { command as rollCommand } from "./commands/roll.js";
