@@ -10,9 +10,37 @@ import Admin from '@/pages/Admin';
 import Pricing from '@/pages/Pricing';
 import DiscordCallback from '@/pages/DiscordCallback';
 import Banner from '@/pages/Banner';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
+import { useEffect, useState } from 'react';
 
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 const queryClient = new QueryClient();
+
+// Only the site owner (ownerUsername set in session) can access admin
+function AdminGuard() {
+  const [status, setStatus] = useState<'loading' | 'allowed' | 'denied'>('loading');
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    fetch(`${BASE}/api/session/me`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => {
+        if (d?.ownerUsername) setStatus('allowed');
+        else { setStatus('denied'); setLocation('/'); }
+      })
+      .catch(() => { setStatus('denied'); setLocation('/'); });
+  }, []);
+
+  if (status === 'loading') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#13131f' }}>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', fontSize: 13 }}>Checking access…</span>
+      </div>
+    );
+  }
+  if (status === 'denied') return null;
+  return <Admin />;
+}
 
 function Router() {
   return (
@@ -23,7 +51,7 @@ function Router() {
       <Route path="/auth/discord/callback" component={DiscordCallback} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/pricing" component={Pricing} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/admin" component={AdminGuard} />
       <Route component={NotFound} />
     </Switch>
   );

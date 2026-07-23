@@ -14,7 +14,7 @@ type RedeemFormValues = z.infer<typeof redeemSchema>;
 function getErrorMsg(code: string | null): { text: string; admin?: boolean } | null {
   if (!code) return null;
   const map: Record<string, { text: string; admin?: boolean }> = {
-    no_ticket:      { text: "Your Discord account isn't linked to any hosting plan. Ask the admin to issue you a key.", admin: true },
+    no_ticket:      { text: "Your Discord account isn't linked to any hosting plan. Contact staff for an access key." },
     discord_denied: { text: 'Discord authorization was cancelled.' },
     oauth_failed:   { text: 'Discord sign-in failed. Please try again.' },
     no_access:      { text: "Your Discord account isn't linked to any hosting plan. Contact staff." },
@@ -78,56 +78,57 @@ export default function Login() {
 
   const errorInfo = getErrorMsg(urlError);
 
-  // Shared dark colors
-  const BG = '#13131f';
-  const CARD = 'rgba(255,255,255,0.04)';
+  const BG     = '#13131f';
+  const CARD   = 'rgba(255,255,255,0.04)';
   const BORDER = 'rgba(255,255,255,0.09)';
-  const TEXT1 = 'rgba(255,255,255,0.88)';
-  const TEXT2 = 'rgba(255,255,255,0.45)';
-  const TEXT3 = 'rgba(255,255,255,0.28)';
+  const TEXT1  = 'rgba(255,255,255,0.88)';
+  const TEXT2  = 'rgba(255,255,255,0.45)';
+  const TEXT3  = 'rgba(255,255,255,0.25)';
+
+  const FEATURES = [
+    { label: 'Deploy in 60 seconds',  sub: 'ZIP upload or GitHub import' },
+    { label: 'Always-on restarts',    sub: 'Auto-restart with backoff' },
+    { label: 'AI crash repair',       sub: 'Automatic code patching' },
+    { label: 'Live console logs',     sub: 'Real-time stdout in browser' },
+  ];
 
   return (
     <div className="min-h-screen flex relative overflow-hidden" style={{ background: BG, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Grid */}
       <div className="absolute inset-0 pointer-events-none" style={{
-        backgroundImage: `linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
         backgroundSize: '40px 40px',
       }} />
       {/* Glow */}
       <div className="absolute pointer-events-none" style={{
         top: '-100px', left: '-100px', width: '500px', height: '500px',
-        background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)',
         borderRadius: '50%',
       }} />
 
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex relative z-10 w-[400px] shrink-0 flex-col px-12 py-14"
+      {/* Left panel */}
+      <div className="hidden lg:flex relative z-10 w-[380px] shrink-0 flex-col px-12 py-14"
         style={{ borderRight: `1px solid ${BORDER}` }}>
-        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 group mb-16">
+        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 mb-16">
           <img src="/lumora-brand.png" alt="Lumora" className="h-7 w-7 object-contain"
-            style={{ filter: 'drop-shadow(0 0 8px rgba(124,58,237,0.5))' }} />
+            style={{ filter: 'drop-shadow(0 0 8px rgba(124,58,237,0.4))' }} />
           <span className="font-bold text-[17px]" style={{ color: TEXT1 }}>Lumora</span>
         </button>
 
         <div className="flex-1">
-          <h2 className="text-[1.9rem] font-black leading-tight mb-3" style={{ color: TEXT1, letterSpacing: '-0.03em' }}>
+          <h2 className="text-[1.8rem] font-black leading-tight mb-3" style={{ color: TEXT1, letterSpacing: '-0.03em' }}>
             Host your bot.<br />Stay online 24/7.
           </h2>
-          <p className="text-[14.5px] leading-relaxed mb-10" style={{ color: TEXT2 }}>
+          <p className="text-[14px] leading-relaxed mb-10" style={{ color: TEXT2 }}>
             Deploy any Discord bot in under 60 seconds. Automatic restarts, live logs, and AI crash repair — all included.
           </p>
 
-          <div className="space-y-4">
-            {[
-              { icon: '⚡', label: 'Deploy in 60 seconds', sub: 'ZIP upload or GitHub import' },
-              { icon: '🔁', label: 'Always-on restarts', sub: 'Auto-restart with backoff' },
-              { icon: '🤖', label: 'AI crash repair', sub: 'Automatic code patching' },
-              { icon: '📡', label: 'Live console logs', sub: 'Real-time stdout in browser' },
-            ].map(({ icon, label, sub }) => (
+          <div className="space-y-5">
+            {FEATURES.map(({ label, sub }) => (
               <div key={label} className="flex items-start gap-3">
-                <span className="text-base leading-none mt-0.5">{icon}</span>
+                <div className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'rgba(167,139,250,0.5)' }} />
                 <div>
-                  <p className="text-[13px] font-semibold" style={{ color: TEXT1 }}>{label}</p>
+                  <p className="text-[13px] font-medium" style={{ color: TEXT1 }}>{label}</p>
                   <p className="text-[12px]" style={{ color: TEXT3 }}>{sub}</p>
                 </div>
               </div>
@@ -138,14 +139,14 @@ export default function Login() {
         <p className="text-[11.5px]" style={{ color: TEXT3 }}>© 2025 Lumora Hosting</p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel */}
       <div className="relative z-10 flex-1 flex flex-col">
         {/* Mobile top bar */}
         <div className="lg:hidden h-14 px-5 flex items-center justify-between"
           style={{ borderBottom: `1px solid ${BORDER}` }}>
           <button onClick={() => setLocation('/')} className="flex items-center gap-2">
             <img src="/lumora-brand.png" alt="Lumora" className="h-5 w-5 object-contain"
-              style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.5))' }} />
+              style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.4))' }} />
             <span className="font-bold text-[15px]" style={{ color: TEXT1 }}>Lumora</span>
           </button>
           <button onClick={() => setLocation('/')} className="flex items-center gap-1.5 text-[13px] transition-colors"
@@ -162,7 +163,7 @@ export default function Login() {
             {/* Mobile logo */}
             <div className="lg:hidden flex justify-center mb-8">
               <img src="/lumora-brand.png" alt="Lumora" className="h-14 w-14 object-contain"
-                style={{ filter: 'drop-shadow(0 0 20px rgba(124,58,237,0.5))' }} />
+                style={{ filter: 'drop-shadow(0 0 20px rgba(124,58,237,0.4))' }} />
             </div>
 
             <div className="mb-7">
@@ -179,17 +180,9 @@ export default function Login() {
             {/* URL error banner */}
             {errorInfo && (
               <div className="mb-5 flex items-start gap-3 p-4 rounded-xl"
-                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)' }}>
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: '#f87171' }} />
-                <div>
-                  <p className="text-[12.5px] leading-relaxed" style={{ color: '#fca5a5' }}>{errorInfo.text}</p>
-                  {errorInfo.admin && (
-                    <a href="/admin" className="inline-block mt-1.5 text-[12px] underline underline-offset-2"
-                      style={{ color: '#a78bfa' }}>
-                      Go to Admin Panel →
-                    </a>
-                  )}
-                </div>
+                <p className="text-[12.5px] leading-relaxed" style={{ color: '#fca5a5' }}>{errorInfo.text}</p>
               </div>
             )}
 
@@ -197,15 +190,21 @@ export default function Login() {
               <div className="space-y-3">
                 {/* Discord CTA */}
                 <button onClick={handleDiscordLogin} disabled={discordLoading}
-                  className="group w-full h-[50px] flex items-center justify-between gap-3 rounded-xl text-[14.5px] font-semibold text-white transition-all hover:opacity-95 hover:-translate-y-px hover:shadow-lg disabled:opacity-60 disabled:translate-y-0 disabled:cursor-not-allowed px-5"
-                  style={{ background: '#5865F2', boxShadow: '0 2px 20px rgba(88,101,242,0.3)' }}>
+                  className="group w-full h-[50px] flex items-center justify-between gap-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px disabled:opacity-50 disabled:translate-y-0 disabled:cursor-not-allowed px-5"
+                  style={{
+                    background: 'rgba(88,101,242,0.18)',
+                    border: '1px solid rgba(88,101,242,0.35)',
+                    color: 'rgba(180,185,255,0.9)',
+                  }}
+                  onMouseEnter={e => { if (!discordLoading) e.currentTarget.style.background = 'rgba(88,101,242,0.26)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(88,101,242,0.18)'; }}>
                   <span className="flex items-center gap-3">
                     {discordLoading
                       ? <Loader2 className="h-5 w-5 animate-spin shrink-0" />
                       : <DiscordIcon className="h-5 w-5 shrink-0" />}
                     {discordLoading ? 'Redirecting to Discord…' : 'Continue with Discord'}
                   </span>
-                  {!discordLoading && <ChevronRight className="h-4 w-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />}
+                  {!discordLoading && <ChevronRight className="h-4 w-4 opacity-40 group-hover:translate-x-0.5 transition-transform" />}
                 </button>
 
                 {discordError && (
@@ -218,14 +217,14 @@ export default function Login() {
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 py-1">
-                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
                   <span className="text-[11px] font-medium" style={{ color: TEXT3 }}>OR</span>
-                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
                 </div>
 
                 {/* Access key */}
                 <button onClick={() => setMode('key')}
-                  className="w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13.5px] font-medium transition-all hover:-translate-y-px"
+                  className="w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13px] font-medium transition-all hover:-translate-y-px"
                   style={{ color: TEXT2, border: `1px solid ${BORDER}`, background: CARD }}
                   onMouseEnter={e => { e.currentTarget.style.color = TEXT1; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
                   onMouseLeave={e => { e.currentTarget.style.color = TEXT2; e.currentTarget.style.borderColor = BORDER; }}>
@@ -234,7 +233,6 @@ export default function Login() {
                 </button>
 
                 <p className="text-[11px] text-center leading-relaxed pt-1" style={{ color: TEXT3 }}>
-                  Discord OAuth must be configured by your admin.<br />
                   No account? Contact staff to get an access key.
                 </p>
               </div>
@@ -258,12 +256,8 @@ export default function Login() {
                             <input {...field}
                               placeholder="XXXX-XXXX-XXXX-XXXX"
                               className="w-full pl-11 pr-4 h-[50px] rounded-xl font-mono text-[14px] tracking-widest text-center uppercase placeholder:normal-case placeholder:tracking-normal transition-all outline-none"
-                              style={{
-                                background: CARD,
-                                border: `1px solid ${BORDER}`,
-                                color: TEXT1,
-                              }}
-                              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.1)'; }}
+                              style={{ background: CARD, border: `1px solid ${BORDER}`, color: TEXT1 }}
+                              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.45)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.08)'; }}
                               onBlur={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = 'none'; }}
                               autoComplete="off" spellCheck={false} />
                           </div>
@@ -279,8 +273,10 @@ export default function Login() {
                       </div>
                     )}
                     <button type="submit" disabled={redeemMutation.isPending}
-                      className="w-full h-[50px] rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-60 hover:opacity-90 hover:-translate-y-px"
-                      style={{ background: '#7c3aed', boxShadow: '0 2px 16px rgba(124,58,237,0.3)' }}>
+                      className="w-full h-[50px] rounded-xl text-[14px] font-medium transition-all disabled:opacity-60 hover:-translate-y-px"
+                      style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.28)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.2)'; }}>
                       {redeemMutation.isPending
                         ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</span>
                         : 'Activate key'}
@@ -292,10 +288,6 @@ export default function Login() {
 
             {/* Footer links */}
             <div className="mt-8 flex items-center justify-center gap-5 pt-5" style={{ borderTop: `1px solid ${BORDER}` }}>
-              <a href="/admin" className="text-[12px] transition-colors" style={{ color: TEXT3 }}
-                onMouseEnter={e => (e.currentTarget.style.color = TEXT2)}
-                onMouseLeave={e => (e.currentTarget.style.color = TEXT3)}>Admin panel</a>
-              <span className="h-3 w-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
               <a href="https://discord.gg/4wEKPrgZmD" target="_blank" rel="noreferrer"
                 className="text-[12px] transition-colors" style={{ color: TEXT3 }}
                 onMouseEnter={e => (e.currentTarget.style.color = TEXT2)}

@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useState, useEffect } from 'react';
-import { ArrowRight, BookOpen, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot, ExternalLink } from 'lucide-react';
+import { ArrowRight, BookOpen, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -11,36 +11,12 @@ interface SessionData {
 }
 
 const FEATURES = [
-  {
-    icon: Zap,
-    title: 'Deploy in 60 Seconds',
-    desc: 'Upload a ZIP, pick a runtime, and your bot is live. No server config, no SSH, no guesswork.',
-  },
-  {
-    icon: RotateCw,
-    title: 'Always-On Restarts',
-    desc: 'Automatic restarts with exponential backoff keep your bot online even after unexpected crashes.',
-  },
-  {
-    icon: Bot,
-    title: 'AI Crash Repair',
-    desc: 'When your bot crashes, our AI diagnoses and patches the code automatically — up to 3 attempts.',
-  },
-  {
-    icon: Shield,
-    title: 'Secure Sandboxing',
-    desc: 'Every bot runs in an isolated process. Environment variables are encrypted at rest.',
-  },
-  {
-    icon: Activity,
-    title: 'Live Console Logs',
-    desc: 'Stream and filter your bot\'s stdout in the browser in real time. No SSH required.',
-  },
-  {
-    icon: Code2,
-    title: 'In-Browser File Editor',
-    desc: 'Edit your bot\'s source files directly in the portal with syntax highlighting via CodeMirror.',
-  },
+  { icon: Zap,      title: 'Deploy in 60 Seconds',   desc: 'Upload a ZIP, pick a runtime, and your bot is live. No server config, no SSH, no guesswork.' },
+  { icon: RotateCw, title: 'Always-On Restarts',      desc: 'Automatic restarts with exponential backoff keep your bot online even after unexpected crashes.' },
+  { icon: Bot,      title: 'AI Crash Repair',         desc: 'When your bot crashes, our AI diagnoses and patches the code automatically — up to 3 attempts.' },
+  { icon: Shield,   title: 'Secure Sandboxing',       desc: 'Every bot runs in an isolated process. Environment variables are encrypted at rest.' },
+  { icon: Activity, title: 'Live Console Logs',       desc: "Stream and filter your bot's stdout in the browser in real time. No SSH required." },
+  { icon: Code2,    title: 'In-Browser File Editor',  desc: 'Edit your bot\'s source files directly in the portal with syntax highlighting via CodeMirror.' },
 ];
 
 function DiscordIcon({ className }: { className?: string }) {
@@ -67,7 +43,6 @@ export default function Landing() {
   const avatarUrl = session?.discord?.avatar && session.discord.id
     ? `https://cdn.discordapp.com/avatars/${session.discord.id}/${session.discord.avatar}.webp?size=64`
     : null;
-
   const displayName = session?.discord?.globalName || session?.discord?.username || session?.ownerUsername;
 
   return (
@@ -79,79 +54,72 @@ export default function Landing() {
       {/* Grid background */}
       <div className="absolute inset-0 pointer-events-none" style={{
         backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
         `,
         backgroundSize: '40px 40px',
       }} />
-
-      {/* Purple glow — top left */}
+      {/* Subtle glow */}
       <div className="absolute pointer-events-none" style={{
-        top: '-120px',
-        left: '-120px',
-        width: '600px',
-        height: '600px',
-        background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, rgba(99,102,241,0.08) 40%, transparent 70%)',
+        top: '-160px', left: '-160px',
+        width: '560px', height: '560px',
+        background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, rgba(99,102,241,0.05) 45%, transparent 70%)',
         borderRadius: '50%',
       }} />
 
-      {/* ── Nav ─────────────────────────────────────────────────────────────── */}
+      {/* ── Nav ──────────────────────────────────────────────────────────────── */}
       <nav className="relative z-10 flex items-center h-14 px-6 md:px-10"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        {/* Logo */}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0 mr-8">
           <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain"
-            style={{ filter: 'drop-shadow(0 0 8px rgba(124,58,237,0.5))' }} />
-          <span className="font-bold text-[15px]" style={{ color: '#f0f0fa' }}>Lumora</span>
+            style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.4))' }} />
+          <span className="font-bold text-[15px]" style={{ color: 'rgba(255,255,255,0.88)' }}>Lumora</span>
         </button>
 
-        {/* Links */}
         <div className="hidden sm:flex items-center gap-1">
           <button onClick={() => setLocation('/pricing')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors"
-            style={{ color: 'rgba(255,255,255,0.5)' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'transparent'; }}>
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
             <CreditCard className="h-3.5 w-3.5" /> Pricing
           </button>
           <button
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors"
-            style={{ color: 'rgba(255,255,255,0.5)' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'transparent'; }}>
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
             <BookOpen className="h-3.5 w-3.5" /> Docs
           </button>
         </div>
 
-        {/* Right side auth */}
         <div className="ml-auto flex items-center gap-2.5">
           {!loading && (
             session ? (
               <>
-                {/* Avatar */}
                 <div className="flex items-center gap-2.5">
                   <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center shrink-0"
-                    style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(124,58,237,0.3)' }}>
+                    style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(124,58,237,0.25)' }}>
                     {avatarUrl
                       ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                       : <span className="text-[11px] font-bold" style={{ color: '#a78bfa' }}>{(displayName || '?')[0].toUpperCase()}</span>}
                   </div>
-                  <span className="hidden sm:block text-[13px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    {displayName}
-                  </span>
+                  <span className="hidden sm:block text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{displayName}</span>
                 </div>
                 <button onClick={() => setLocation('/dashboard')}
-                  className="h-8 px-4 rounded-lg text-[13px] font-medium text-white transition-all hover:opacity-90"
-                  style={{ background: '#7c3aed', boxShadow: '0 2px 12px rgba(124,58,237,0.3)' }}>
+                  className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
+                  style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.28)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.2)'; }}>
                   Dashboard
                 </button>
               </>
             ) : (
               <button onClick={() => setLocation('/login')}
                 className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
-                style={{ color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.12)' }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}>
+                style={{ color: 'rgba(255,255,255,0.55)', background: 'transparent' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; }}>
                 Log In
               </button>
             )
@@ -159,30 +127,15 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── Hero ────────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24 pb-20">
-
-        {/* Live badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-10 text-[12.5px] font-medium"
-          style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: 'rgba(255,255,255,0.65)',
-          }}>
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{
-            background: '#22c55e',
-            boxShadow: '0 0 6px #22c55e',
-          }} />
-          Always-on Discord bot hosting — Live
-        </div>
-
+      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
+      <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-20 pb-16">
         {/* Icon */}
-        <div className="mb-8">
+        <div className="mb-10">
           <img
             src="/lumora-brand.png"
             alt="Lumora"
-            className="h-[90px] w-[90px] object-contain mx-auto"
-            style={{ filter: 'drop-shadow(0 0 32px rgba(124,58,237,0.5)) drop-shadow(0 0 12px rgba(124,58,237,0.3))' }}
+            className="h-[130px] w-[130px] object-contain mx-auto"
+            style={{ filter: 'drop-shadow(0 0 40px rgba(124,58,237,0.4)) drop-shadow(0 0 16px rgba(124,58,237,0.2))' }}
           />
         </div>
 
@@ -192,9 +145,8 @@ export default function Landing() {
           Welcome to Lumora
         </h1>
 
-        {/* Sub */}
         <p className="max-w-lg mx-auto mb-10 leading-relaxed"
-          style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.5)' }}>
+          style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.45)' }}>
           Keep your Discord bot online 24/7. Upload your code, paste your token, and you're live in under a minute.
         </p>
 
@@ -202,146 +154,114 @@ export default function Landing() {
         {session ? (
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button onClick={() => setLocation('/dashboard')}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14.5px] font-semibold text-white transition-all hover:opacity-90 hover:-translate-y-px"
-              style={{ background: '#7c3aed', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}>
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px"
+              style={{ background: 'rgba(124,58,237,0.22)', border: '1px solid rgba(124,58,237,0.4)', color: '#c4b5fd' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.3)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.22)'; }}>
               Open the Dashboard <ArrowRight className="h-4 w-4" />
             </button>
             <button onClick={() => setLocation('/pricing')}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-              style={{ color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}>
+              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}>
               View Plans
             </button>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button onClick={() => setLocation('/login')}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14.5px] font-semibold text-white transition-all hover:opacity-90 hover:-translate-y-px"
-              style={{ background: '#7c3aed', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}>
-              <DiscordIcon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
+              style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.26)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}>
+              <DiscordIcon className="h-[17px] w-[17px]" />
               Sign in with Discord
             </button>
             <button onClick={() => setLocation('/pricing')}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-              style={{ color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)' }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}>
-              View Plans <ExternalLink className="h-3.5 w-3.5" />
+              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}>
+              View Plans
             </button>
-          </div>
-        )}
-
-        {/* Logged-in quick access panel */}
-        {session && (
-          <div className="mt-12 w-full max-w-xl rounded-2xl p-5 text-left"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <Bot className="h-4 w-4" style={{ color: '#a78bfa' }} />
-              <span className="text-[13px] font-semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>Quick Access</span>
-            </div>
-            <p className="text-[12.5px] mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Jump directly to your hosting portal.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: 'Hosting Portal', icon: Bot, path: '/dashboard' },
-                { label: 'Console Logs', icon: Activity, path: '/dashboard' },
-                { label: 'File Manager', icon: Code2, path: '/dashboard' },
-              ].map(({ label, icon: Icon, path }) => (
-                <button key={label} onClick={() => setLocation(path)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] transition-all hover:-translate-y-px"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.borderColor = 'rgba(124,58,237,0.35)'; e.currentTarget.style.background = 'rgba(124,58,237,0.08)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}>
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
         )}
       </section>
 
-      {/* ── Features ────────────────────────────────────────────────────────── */}
+      {/* ── Features ─────────────────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-10 pb-24 max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-[1.75rem] font-bold tracking-tight mb-3" style={{ color: '#a78bfa' }}>
-            Powerful Features
+          <h2 className="text-[1.6rem] font-bold tracking-tight mb-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+            What's included
           </h2>
-          <p className="text-[14.5px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            Everything you need to run Discord bots reliably at scale.
+          <p className="text-[14px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            Everything you need to run Discord bots reliably.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {FEATURES.map(({ icon: Icon, title, desc }) => (
             <div key={title}
-              className="rounded-xl p-5 transition-all duration-200 group"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-              }}
+              className="rounded-xl p-5 transition-all duration-200"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.background = 'rgba(124,58,237,0.07)';
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(124,58,237,0.25)';
+                (e.currentTarget as HTMLDivElement).style.background = 'rgba(124,58,237,0.06)';
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(124,58,237,0.2)';
               }}
               onMouseLeave={e => {
                 (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)';
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.07)';
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.06)';
               }}>
               <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
-                style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.18)' }}>
                 <Icon className="h-4 w-4" style={{ color: '#a78bfa' }} />
               </div>
-              <h3 className="font-semibold text-[14px] mb-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>{title}</h3>
-              <p className="text-[12.5px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>{desc}</p>
+              <h3 className="font-semibold text-[13.5px] mb-1.5" style={{ color: 'rgba(255,255,255,0.8)' }}>{title}</h3>
+              <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>{desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── CTA Banner ──────────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-10 pb-24 max-w-3xl mx-auto">
-        <div className="rounded-2xl p-8 text-center"
-          style={{
-            background: 'rgba(124,58,237,0.08)',
-            border: '1px solid rgba(124,58,237,0.2)',
-            boxShadow: '0 0 60px rgba(124,58,237,0.06)',
-          }}>
-          <h3 className="text-[1.4rem] font-bold mb-2" style={{ color: '#f4f4ff' }}>Start hosting today</h3>
-          <p className="text-[13.5px] mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+      {/* ── CTA ──────────────────────────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-10 pb-28 max-w-2xl mx-auto text-center">
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '3rem' }}>
+          <h3 className="font-bold mb-3" style={{ fontSize: '1.5rem', color: 'rgba(255,255,255,0.88)', letterSpacing: '-0.02em' }}>
+            Start hosting today
+          </h3>
+          <p className="mb-8 leading-relaxed" style={{ fontSize: '0.925rem', color: 'rgba(255,255,255,0.4)' }}>
             One bot, 256 MB RAM, live console, AI crash repair — no credit card needed.
           </p>
           <button onClick={() => setLocation(session ? '/dashboard' : '/login')}
-            className="inline-flex items-center gap-2 px-7 py-2.5 rounded-xl text-[14px] font-semibold text-white transition-all hover:opacity-90 hover:-translate-y-px"
-            style={{ background: '#7c3aed', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }}>
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
+            style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.26)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}>
             {session ? 'Go to Dashboard' : 'Get started free'} <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </section>
 
-      {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <footer className="relative z-10 px-6 md:px-10 pb-10" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      <footer className="relative z-10 px-6 md:px-10 pb-10" style={{
+        background: '#13131f',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+      }}>
         <div className="max-w-5xl mx-auto pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain opacity-40" />
-            <span className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Lumora Hosting</span>
+            <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain opacity-30" />
+            <span className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.2)' }}>Lumora Hosting</span>
           </div>
-          <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.18)' }}>© 2025 Lumora. All rights reserved.</p>
+          <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.15)' }}>© 2025 Lumora. All rights reserved.</p>
           <div className="flex items-center gap-5">
-            {[
-              { label: 'Pricing', path: '/pricing' },
-              { label: 'Admin', path: '/admin' },
-            ].map(({ label, path }) => (
-              <button key={label} onClick={() => setLocation(path)}
-                className="text-[12px] transition-colors"
-                style={{ color: 'rgba(255,255,255,0.25)' }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}>
-                {label}
-              </button>
-            ))}
+            <button onClick={() => setLocation('/pricing')}
+              className="text-[12px] transition-colors"
+              style={{ color: 'rgba(255,255,255,0.22)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.22)')}>
+              Pricing
+            </button>
           </div>
         </div>
       </footer>
