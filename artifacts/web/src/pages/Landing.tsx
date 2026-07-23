@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useState, useEffect } from 'react';
-import { ArrowRight, BookOpen, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot } from 'lucide-react';
+import { ArrowRight, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot, Terminal, Lock } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -13,19 +13,18 @@ interface SessionData {
 const FEATURES = [
   { icon: Zap,      title: 'Deploy in 60 Seconds',   desc: 'Upload a ZIP, pick a runtime, and your bot is live. No server config, no SSH, no guesswork.' },
   { icon: RotateCw, title: 'Always-On Restarts',      desc: 'Automatic restarts with exponential backoff keep your bot online even after unexpected crashes.' },
-  { icon: Bot,      title: 'AI Crash Repair',         desc: 'When your bot crashes, our AI diagnoses and patches the code automatically — up to 3 attempts.' },
+  { icon: Bot,      title: 'AI Crash Repair',         desc: 'When your bot crashes, our AI diagnoses and patches the code automatically — up to 3 attempts per restart.' },
   { icon: Shield,   title: 'Secure Sandboxing',       desc: 'Every bot runs in an isolated process. Environment variables are encrypted at rest.' },
   { icon: Activity, title: 'Live Console Logs',       desc: "Stream and filter your bot's stdout in the browser in real time. No SSH required." },
   { icon: Code2,    title: 'In-Browser File Editor',  desc: 'Edit your bot\'s source files directly in the portal with syntax highlighting via CodeMirror.' },
 ];
 
-function DiscordIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.01.043.027.057a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
-    </svg>
-  );
-}
+const STEPS = [
+  { num: '01', title: 'Sign in with Discord', desc: 'Authenticate with your Discord account to access your hosting portal.' },
+  { num: '02', title: 'Upload your bot', desc: 'Drag and drop a ZIP file of your bot code. Node.js and Python are detected automatically.' },
+  { num: '03', title: 'Configure secrets', desc: 'Add your bot token and any environment variables securely via the built-in env manager.' },
+  { num: '04', title: 'Go live', desc: 'Hit Run. Your bot starts, stays online, and auto-recovers from crashes — no babysitting required.' },
+];
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -45,81 +44,80 @@ export default function Landing() {
     : null;
   const displayName = session?.discord?.globalName || session?.discord?.username || session?.ownerUsername;
 
+  // Token-style colors
+  const BG     = '#0d0d16';
+  const BORDER = 'rgba(255,255,255,0.07)';
+  const TEXT1  = 'rgba(255,255,255,0.92)';
+  const TEXT2  = 'rgba(255,255,255,0.42)';
+  const PURPLE = '#7c3aed';
+
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{
-      background: '#13131f',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      color: '#e8e8f0',
+      background: BG,
+      fontFamily: "'Inter', system-ui, sans-serif",
+      color: TEXT1,
     }}>
-      {/* Grid background */}
-      <div className="absolute inset-0 pointer-events-none" style={{
+      {/* Subtle grid */}
+      <div className="absolute inset-0 pointer-events-none select-none" style={{
         backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+          linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)
         `,
-        backgroundSize: '40px 40px',
+        backgroundSize: '48px 48px',
       }} />
-      {/* Subtle glow */}
+      {/* Top-center glow — static, no animation */}
       <div className="absolute pointer-events-none" style={{
-        top: '-160px', left: '-160px',
-        width: '560px', height: '560px',
-        background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, rgba(99,102,241,0.05) 45%, transparent 70%)',
-        borderRadius: '50%',
+        top: '-80px', left: '50%', transform: 'translateX(-50%)',
+        width: '700px', height: '400px',
+        background: 'radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.14) 0%, rgba(99,102,241,0.05) 45%, transparent 70%)',
       }} />
 
-      {/* ── Nav ──────────────────────────────────────────────────────────────── */}
-      <nav className="relative z-10 flex items-center h-14 px-6 md:px-10"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0 mr-8">
+      {/* ── Nav ──────────────────────────────────────────────────────── */}
+      <nav className="relative z-10 flex items-center h-14 px-6 md:px-12"
+        style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0 mr-10">
           <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain"
-            style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.4))' }} />
-          <span className="font-bold text-[15px]" style={{ color: 'rgba(255,255,255,0.88)' }}>Lumora</span>
+            style={{ filter: 'drop-shadow(0 0 6px rgba(124,58,237,0.35))' }} />
+          <span className="font-semibold text-[15px] tracking-tight" style={{ color: TEXT1 }}>Lumora</span>
         </button>
 
-        <div className="hidden sm:flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-0.5">
           <button onClick={() => setLocation('/pricing')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors"
-            style={{ color: 'rgba(255,255,255,0.4)' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-all"
+            style={{ color: TEXT2 }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = TEXT2; e.currentTarget.style.background = 'transparent'; }}>
             <CreditCard className="h-3.5 w-3.5" /> Pricing
-          </button>
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors"
-            style={{ color: 'rgba(255,255,255,0.4)' }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
-            <BookOpen className="h-3.5 w-3.5" /> Docs
           </button>
         </div>
 
-        <div className="ml-auto flex items-center gap-2.5">
+        <div className="ml-auto flex items-center gap-3">
           {!loading && (
             session ? (
               <>
                 <div className="flex items-center gap-2.5">
                   <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center shrink-0"
-                    style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(124,58,237,0.25)' }}>
+                    style={{ border: `1px solid rgba(255,255,255,0.1)`, background: 'rgba(124,58,237,0.2)' }}>
                     {avatarUrl
                       ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                       : <span className="text-[11px] font-bold" style={{ color: '#a78bfa' }}>{(displayName || '?')[0].toUpperCase()}</span>}
                   </div>
-                  <span className="hidden sm:block text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{displayName}</span>
+                  <span className="hidden sm:block text-[13px]" style={{ color: TEXT2 }}>{displayName}</span>
                 </div>
                 <button onClick={() => setLocation('/dashboard')}
                   className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
-                  style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.28)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.2)'; }}>
+                  style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.32)', color: '#c4b5fd' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.26)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}>
                   Dashboard
                 </button>
               </>
             ) : (
               <button onClick={() => setLocation('/login')}
                 className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
-                style={{ color: 'rgba(255,255,255,0.55)', background: 'transparent' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; }}>
+                style={{ color: TEXT2 }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = TEXT2; }}>
                 Log In
               </button>
             )
@@ -127,139 +125,178 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-20 pb-16">
-        {/* Icon */}
-        <div className="mb-10">
-          <img
-            src="/lumora-brand.png"
-            alt="Lumora"
-            className="h-[130px] w-[130px] object-contain mx-auto"
-            style={{ filter: 'drop-shadow(0 0 40px rgba(124,58,237,0.4)) drop-shadow(0 0 16px rgba(124,58,237,0.2))' }}
-          />
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24 pb-20">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 mb-8 px-3 py-1 rounded-full text-[11.5px] font-medium"
+          style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.22)', color: 'rgba(167,139,250,0.85)' }}>
+          <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: '#a78bfa' }} />
+          Discord bot hosting, simplified
         </div>
 
         {/* Headline */}
-        <h1 className="font-black tracking-tight leading-[1.06] mb-5"
-          style={{ fontSize: 'clamp(2.4rem, 6vw, 4rem)', color: '#f4f4ff', letterSpacing: '-0.03em' }}>
-          Welcome to Lumora
+        <h1 className="font-black tracking-tight leading-[1.05] mb-5 max-w-3xl"
+          style={{ fontSize: 'clamp(2.6rem, 6.5vw, 4.2rem)', color: '#f0efff', letterSpacing: '-0.035em' }}>
+          Keep your Discord bot<br />
+          <span style={{ color: '#a78bfa' }}>online 24/7.</span>
         </h1>
 
-        <p className="max-w-lg mx-auto mb-10 leading-relaxed"
-          style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.45)' }}>
-          Keep your Discord bot online 24/7. Upload your code, paste your token, and you're live in under a minute.
+        <p className="max-w-md mx-auto mb-10 leading-relaxed"
+          style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.4)' }}>
+          Upload your code, paste your token, and you're live in under a minute.
+          Auto-restarts, live logs, and AI crash repair — all included.
         </p>
 
         {/* CTAs */}
         {session ? (
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button onClick={() => setLocation('/dashboard')}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px"
-              style={{ background: 'rgba(124,58,237,0.22)', border: '1px solid rgba(124,58,237,0.4)', color: '#c4b5fd' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.3)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.22)'; }}>
-              Open the Dashboard <ArrowRight className="h-4 w-4" />
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px active:translate-y-0"
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                boxShadow: '0 4px 20px rgba(124,58,237,0.3)',
+                color: '#fff',
+              }}>
+              Open Dashboard <ArrowRight className="h-4 w-4" />
             </button>
             <button onClick={() => setLocation('/pricing')}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}>
+              style={{ color: 'rgba(255,255,255,0.55)', border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.04)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = BORDER; }}>
               View Plans
             </button>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <button onClick={() => setLocation('/login')}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-              style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.26)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}>
-              <DiscordIcon className="h-[17px] w-[17px]" />
-              Sign in with Discord
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px active:translate-y-0"
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                boxShadow: '0 4px 20px rgba(124,58,237,0.3)',
+                color: '#fff',
+              }}>
+              Sign in with Discord <ArrowRight className="h-4 w-4" />
             </button>
             <button onClick={() => setLocation('/pricing')}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}>
+              style={{ color: 'rgba(255,255,255,0.55)', border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.04)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = BORDER; }}>
               View Plans
             </button>
           </div>
         )}
       </section>
 
-      {/* ── Features ─────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-10 pb-24 max-w-5xl mx-auto">
+      {/* ── Features ─────────────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-12 pb-24 max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-[1.6rem] font-bold tracking-tight mb-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest mb-3"
+            style={{ color: 'rgba(124,58,237,0.7)' }}>
+            <span className="h-px w-5 inline-block" style={{ background: 'rgba(124,58,237,0.5)' }} />
             What's included
-          </h2>
-          <p className="text-[14px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            Everything you need to run Discord bots reliably.
+            <span className="h-px w-5 inline-block" style={{ background: 'rgba(124,58,237,0.5)' }} />
           </p>
+          <h2 className="text-[1.65rem] font-bold tracking-tight" style={{ color: TEXT1, letterSpacing: '-0.025em' }}>
+            Everything your bot needs to thrive
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {FEATURES.map(({ icon: Icon, title, desc }) => (
             <div key={title}
-              className="rounded-xl p-5 transition-all duration-200"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+              className="rounded-xl p-5 transition-all duration-200 group cursor-default"
+              style={{ background: 'rgba(255,255,255,0.025)', border: `1px solid ${BORDER}` }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.background = 'rgba(124,58,237,0.06)';
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(124,58,237,0.2)';
+                (e.currentTarget as HTMLDivElement).style.background = 'rgba(124,58,237,0.05)';
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(124,58,237,0.18)';
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)';
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.06)';
+                (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.025)';
+                (e.currentTarget as HTMLDivElement).style.borderColor = BORDER;
               }}>
-              <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
-                style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.18)' }}>
+              <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-4"
+                style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.16)' }}>
                 <Icon className="h-4 w-4" style={{ color: '#a78bfa' }} />
               </div>
-              <h3 className="font-semibold text-[13.5px] mb-1.5" style={{ color: 'rgba(255,255,255,0.8)' }}>{title}</h3>
-              <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>{desc}</p>
+              <h3 className="font-semibold text-[13.5px] mb-1.5" style={{ color: 'rgba(255,255,255,0.82)' }}>{title}</h3>
+              <p className="text-[12.5px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.32)' }}>{desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── CTA ──────────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 px-6 md:px-10 pb-28 max-w-2xl mx-auto text-center">
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '3rem' }}>
-          <h3 className="font-bold mb-3" style={{ fontSize: '1.5rem', color: 'rgba(255,255,255,0.88)', letterSpacing: '-0.02em' }}>
+      {/* ── How it works ─────────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-12 pb-28 max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest mb-3"
+            style={{ color: 'rgba(124,58,237,0.7)' }}>
+            <span className="h-px w-5 inline-block" style={{ background: 'rgba(124,58,237,0.5)' }} />
+            Getting started
+            <span className="h-px w-5 inline-block" style={{ background: 'rgba(124,58,237,0.5)' }} />
+          </p>
+          <h2 className="text-[1.65rem] font-bold tracking-tight" style={{ color: TEXT1, letterSpacing: '-0.025em' }}>
+            Live in four steps
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {STEPS.map(({ num, title, desc }) => (
+            <div key={num} className="relative rounded-xl p-5"
+              style={{ background: 'rgba(255,255,255,0.025)', border: `1px solid ${BORDER}` }}>
+              <span className="block text-[10.5px] font-mono font-semibold mb-3"
+                style={{ color: 'rgba(124,58,237,0.55)' }}>{num}</span>
+              <h3 className="font-semibold text-[13px] mb-2" style={{ color: 'rgba(255,255,255,0.82)' }}>{title}</h3>
+              <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.3)' }}>{desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── CTA strip ────────────────────────────────────────────────── */}
+      <section className="relative z-10 px-6 md:px-12 pb-28 max-w-2xl mx-auto text-center">
+        <div className="rounded-2xl p-10"
+          style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.16)' }}>
+          <div className="flex items-center justify-center mb-1">
+            <Lock className="h-4 w-4 mr-2" style={{ color: 'rgba(124,58,237,0.6)' }} />
+            <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(124,58,237,0.65)' }}>
+              Invite-only access
+            </span>
+          </div>
+          <h3 className="font-bold mt-3 mb-3" style={{ fontSize: '1.5rem', color: TEXT1, letterSpacing: '-0.02em' }}>
             Start hosting today
           </h3>
-          <p className="mb-8 leading-relaxed" style={{ fontSize: '0.925rem', color: 'rgba(255,255,255,0.4)' }}>
+          <p className="mb-8 leading-relaxed" style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.38)' }}>
             One bot, 256 MB RAM, live console, AI crash repair — no credit card needed.
           </p>
           <button onClick={() => setLocation(session ? '/dashboard' : '/login')}
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-medium transition-all hover:-translate-y-px"
-            style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.35)', color: '#c4b5fd' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.26)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(124,58,237,0.18)'; }}>
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px active:translate-y-0"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+              boxShadow: '0 4px 20px rgba(124,58,237,0.28)',
+              color: '#fff',
+            }}>
             {session ? 'Go to Dashboard' : 'Get started free'} <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="relative z-10 px-6 md:px-10 pb-10" style={{
-        background: '#13131f',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
-      }}>
+      {/* ── Footer ───────────────────────────────────────────────────── */}
+      <footer className="relative z-10 px-6 md:px-12 pb-10"
+        style={{ borderTop: `1px solid ${BORDER}` }}>
         <div className="max-w-5xl mx-auto pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain opacity-30" />
-            <span className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.2)' }}>Lumora Hosting</span>
+            <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain"
+              style={{ opacity: 0.25, filter: `drop-shadow(0 0 4px ${PURPLE})` }} />
+            <span className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.18)' }}>Lumora Hosting</span>
           </div>
-          <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.15)' }}>© 2025 Lumora. All rights reserved.</p>
+          <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.12)' }}>© 2025 Lumora. All rights reserved.</p>
           <div className="flex items-center gap-5">
             <button onClick={() => setLocation('/pricing')}
               className="text-[12px] transition-colors"
-              style={{ color: 'rgba(255,255,255,0.22)' }}
+              style={{ color: 'rgba(255,255,255,0.2)' }}
               onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.22)')}>
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}>
               Pricing
             </button>
           </div>

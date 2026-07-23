@@ -1,0 +1,42 @@
+Update the Lumora website with these changes:
+
+First, update the Discord OAuth login system with the new redirect URI:
+
+Redirect URI:
+https://2cf66a9d-7abd-4738-8cd1-11c9d3274f2b-00-8lo1pabp3w6f.kirk.replit.dev/auth/discord/callback
+
+Discord OAuth URL:
+https://discord.com/oauth2/authorize?client_id=1378231778292142172&response_type=code&redirect_uri=https%3A%2F%2F2cf66a9d-7abd-4738-8cd1-11c9d3274f2b-00-8lo1pabp3w6f.kirk.replit.dev%2Fauth%2Fdiscord%2Fcallback&scope=identify+guilds
+
+Replace the old Discord login configuration everywhere in the project. Make sure Sign in with Discord works correctly, the callback works, the user profile loads correctly, and the dashboard login flow is smooth.
+
+Design improvements:
+- Remove the Discord emoji/icon next to the Discord branding. Keep it clean and professional.
+- Redesign the Sign in with Discord button so it looks like a real modern SaaS platform button, not a default template.
+- The "View Plans" section has black text that is hard to see. Fix the colors and make sure the text matches the new design theme.
+- Redesign the Free, Pro, and Business pricing cards. Remove unnecessary emojis like 💬 and 🟢. Make the pricing section look premium, futuristic, and professional.
+
+The homepage should be renamed/routed as "/home".
+
+Fix the homepage hero section:
+- There is a strange straight line appearing underneath "Start hosting today". Remove that bug.
+- Make the hero section clean and smooth, especially when screen recording because some glow effects currently become blurry.
+- Improve animations and effects so they look polished instead of AI-generated.
+
+Improve these sections because they currently feel useless:
+
+Getting Started
+Features
+Runtimes
+Node.js Python Java
+Billing
+Plans & Pricing Usage Limits Upgrade
+
+Make these actual useful sections:
+- Getting Started should explain how a new user can upload their bot, configure secrets, deploy, and manage their bot.
+- Features should show real Lumora features like AI repair, automatic deployment, logs, uptime monitoring, environment variables, and Discord integration.
+- Runtimes should explain supported languages and what users can host.
+- Billing should explain plans, pricing, usage limits, and upgrading clearly.
+
+Overall:
+Redesign the website so it feels like a professional hosting company. Take inspiration from modern platforms like Vercel, Railway, Render, DigitalOcean, and similar services. Do not copy them, but use their clean layouts, spacing, typography, and user experience style. Make Lumora feel futuristic, premium, and handcrafted instead of AI-generated.

@@ -46,6 +46,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/home" component={Landing} />
       <Route path="/banner" component={Banner} />
       <Route path="/login" component={Login} />
       <Route path="/auth/discord/callback" component={DiscordCallback} />
