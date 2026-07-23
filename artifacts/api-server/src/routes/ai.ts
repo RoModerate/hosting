@@ -274,9 +274,10 @@ async function executeTool(
       if (!filePath) return "Error: path is required.";
       if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
       const result = await readFileContent(ticketId, filePath);
-      const preview = result.content.slice(0, 6000);
-      const truncated = result.content.length > 6000
-        ? `\n... (truncated — ${result.content.length} bytes total)` : "";
+      const fileContent = result.content ?? "";
+      const preview = fileContent.slice(0, 6000);
+      const truncated = fileContent.length > 6000
+        ? `\n... (truncated — ${fileContent.length} bytes total)` : "";
       return "```\n" + preview + truncated + "\n```";
     }
 
@@ -344,7 +345,7 @@ async function executeTool(
       let current: string;
       try {
         const read = await readFileContent(ticketId, filePath);
-        current = read.content;
+        current = read.content ?? "";
       } catch {
         return `Error: File not found: ${filePath}`;
       }
@@ -376,7 +377,7 @@ async function executeTool(
 
       try {
         const existing = await readFileContent(ticketId, filePath);
-        pushUndo(ticketId, filePath, existing.content);
+        pushUndo(ticketId, filePath, existing.content ?? "");
       } catch {
         pushUndo(ticketId, filePath, "");
       }
@@ -399,7 +400,7 @@ async function executeTool(
       if (filePath.includes("..") || filePath.startsWith("/")) return `Error: Invalid path "${filePath}".`;
       try {
         const existing = await readFileContent(ticketId, filePath);
-        pushUndo(ticketId, filePath, existing.content);
+        pushUndo(ticketId, filePath, existing.content ?? "");
       } catch { /* ignore */ }
       await deletePath(ticketId, filePath);
       const reason = args["reason"] ? ` — ${args["reason"]}` : "";

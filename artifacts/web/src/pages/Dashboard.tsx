@@ -1134,7 +1134,7 @@ export default function Dashboard() {
 
           {/* Files */}
           {activeTab === 'files' && (
-            <div className="flex-1 overflow-hidden flex flex-col"><FileManager /></div>
+            <div className="flex-1 overflow-hidden flex flex-col"><FileManager hasBot={!!hostedBot?.fileName} /></div>
           )}
 
           {/* Environment Variables */}

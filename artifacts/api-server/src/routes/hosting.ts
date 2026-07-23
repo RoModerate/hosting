@@ -466,7 +466,7 @@ router.delete("/bots", async (req, res) => {
     fileName: "",
     extractPath: "",
     status: "stopped",
-    startCommand: null,
+    startCommand: "",
     errorMessage: null,
     aiExplanation: null,
   }).catch(() => undefined);

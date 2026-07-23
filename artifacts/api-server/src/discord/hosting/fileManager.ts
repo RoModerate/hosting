@@ -259,7 +259,7 @@ export async function searchFiles(
 
   async function walk(dir: string, depth: number): Promise<void> {
     if (results.length >= limit || depth > 12) return;
-    let entries: fsp.Dirent[];
+    let entries: fs.Dirent[];
     try {
       entries = await fsp.readdir(dir, { withFileTypes: true });
     } catch {

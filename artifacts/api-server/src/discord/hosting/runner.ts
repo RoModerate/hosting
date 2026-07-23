@@ -1509,7 +1509,7 @@ async function runRepairLoop(params: RepairLoopParams): Promise<{
 
   return {
     fixed: false,
-    friendlyMessage: `Lumora tried ${MAX_REPAIR_ATTEMPTS} automatic repair${MAX_REPAIR_ATTEMPTS !== 1 ? "s" : ""} but the bot is still crashing. Please review the log output and check your configuration.`,
+    friendlyMessage: `Lumora tried ${MAX_REPAIR_ATTEMPTS} automatic repair${(MAX_REPAIR_ATTEMPTS as number) !== 1 ? "s" : ""} but the bot is still crashing. Please review the log output and check your configuration.`,
     lastOutput: crashOutput,
   };
 }
@@ -2252,14 +2252,6 @@ export async function restartHostedBot(
     for (const fix of preLaunch.fixes) {
       appendLiveLog(ticketId, `[Lumora] Pre-launch: ${fix.description}\n`);
     }
-    // If the analysis updated the start command, use the new one.
-    if (preLaunch.startCommand) {
-      const [fixedCmd, ...fixedArgs] = preLaunch.startCommand.split(" ");
-      if (fixedCmd) {
-        startCommand = { cmd: fixedCmd, args: fixedArgs, label: preLaunch.startCommand };
-        await updateHostedBot(ticketId, { startCommand: preLaunch.startCommand });
-      }
-    }
   }
 
   // ── 9. Start the bot ─────────────────────────────────────────────────────
@@ -2417,8 +2409,8 @@ export async function resumeHostedBotsOnBoot(
       );
   }
 
-  const resumableStarting: typeof startingRows = [];
-  const stuckStarting: typeof startingRows = [];
+  const resumableStarting: typeof liveRows = [];
+  const stuckStarting: typeof liveRows = [];
 
   // Resume any bot that was live at the time the server was restarted,
   // regardless of which phase of the Discord connection lifecycle it was in.
