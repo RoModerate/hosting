@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useState, useEffect } from 'react';
-import { ArrowRight, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot, Terminal, Lock } from 'lucide-react';
+import { ArrowRight, CreditCard, Zap, RotateCw, Shield, Activity, Code2, Bot } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -127,11 +127,14 @@ export default function Landing() {
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-24 pb-20">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 mb-8 px-3 py-1 rounded-full text-[11.5px] font-medium"
-          style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.22)', color: 'rgba(167,139,250,0.85)' }}>
-          <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: '#a78bfa' }} />
-          Discord bot hosting, simplified
+        {/* Logo mark */}
+        <div className="mb-8">
+          <img
+            src="/lumora-brand.png"
+            alt="Lumora"
+            className="h-16 w-16 object-contain mx-auto"
+            style={{ filter: 'drop-shadow(0 0 24px rgba(124,58,237,0.45)) drop-shadow(0 0 8px rgba(124,58,237,0.2))' }}
+          />
         </div>
 
         {/* Headline */}
@@ -255,30 +258,25 @@ export default function Landing() {
 
       {/* ── CTA strip ────────────────────────────────────────────────── */}
       <section className="relative z-10 px-6 md:px-12 pb-28 max-w-2xl mx-auto text-center">
-        <div className="rounded-2xl p-10"
-          style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.16)' }}>
-          <div className="flex items-center justify-center mb-1">
-            <Lock className="h-4 w-4 mr-2" style={{ color: 'rgba(124,58,237,0.6)' }} />
-            <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(124,58,237,0.65)' }}>
-              Invite-only access
-            </span>
-          </div>
-          <h3 className="font-bold mt-3 mb-3" style={{ fontSize: '1.5rem', color: TEXT1, letterSpacing: '-0.02em' }}>
-            Start hosting today
-          </h3>
-          <p className="mb-8 leading-relaxed" style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.38)' }}>
-            One bot, 256 MB RAM, live console, AI crash repair — no credit card needed.
-          </p>
-          <button onClick={() => setLocation(session ? '/dashboard' : '/login')}
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px active:translate-y-0"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
-              boxShadow: '0 4px 20px rgba(124,58,237,0.28)',
-              color: '#fff',
-            }}>
-            {session ? 'Go to Dashboard' : 'Get started free'} <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-widest mb-4"
+          style={{ color: 'rgba(124,58,237,0.55)' }}>
+          Start for free · No credit card required
+        </p>
+        <h3 className="font-bold mb-3" style={{ fontSize: '1.75rem', color: TEXT1, letterSpacing: '-0.025em' }}>
+          Start hosting today
+        </h3>
+        <p className="mb-8 leading-relaxed" style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.35)' }}>
+          One bot, 256 MB RAM, live console, AI crash repair — all on the free plan.
+        </p>
+        <button onClick={() => setLocation(session ? '/dashboard' : '/login')}
+          className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px active:translate-y-0"
+          style={{
+            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+            boxShadow: '0 4px 20px rgba(124,58,237,0.28)',
+            color: '#fff',
+          }}>
+          {session ? 'Go to Dashboard' : 'Get started free'} <ArrowRight className="h-4 w-4" />
+        </button>
       </section>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}

@@ -199,9 +199,7 @@ export default function Login() {
                   onMouseEnter={e => { if (!discordLoading) e.currentTarget.style.background = 'rgba(88,101,242,0.26)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(88,101,242,0.18)'; }}>
                   <span className="flex items-center gap-3">
-                    {discordLoading
-                      ? <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-                      : <DiscordIcon className="h-5 w-5 shrink-0" />}
+                    {discordLoading && <Loader2 className="h-5 w-5 animate-spin shrink-0" />}
                     {discordLoading ? 'Redirecting to Discord…' : 'Continue with Discord'}
                   </span>
                   {!discordLoading && <ChevronRight className="h-4 w-4 opacity-40 group-hover:translate-x-0.5 transition-transform" />}

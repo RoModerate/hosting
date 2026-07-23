@@ -1,11 +1,19 @@
 import { useLocation } from 'wouter';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Check, X, ArrowRight, ChevronDown, ChevronRight,
   Bot, Shield, Zap, Search, Menu, Server, Cpu, Layers, Play,
-  Upload, Settings, Terminal, Activity, Code2, RotateCw, Lock,
+  Upload, Settings, Activity, Code2, RotateCw, Lock,
   CreditCard, TrendingUp, AlertCircle,
 } from 'lucide-react';
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
+
+interface SessionData {
+  ticketId?: number;
+  discord?: { id: string; username: string; globalName?: string | null; avatar?: string | null } | null;
+  ownerUsername?: string;
+}
 
 const PLANS = [
   {
@@ -558,6 +566,19 @@ export default function Pricing() {
   const [, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('billing');
+  const [session, setSession] = useState<SessionData | null>(null);
+
+  useEffect(() => {
+    fetch(`${BASE}/api/session/me`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => { if (d?.ticketId) setSession(d); })
+      .catch(() => {});
+  }, []);
+
+  const avatarUrl = session?.discord?.avatar && session.discord.id
+    ? `https://cdn.discordapp.com/avatars/${session.discord.id}/${session.discord.avatar}.webp?size=64`
+    : null;
+  const displayName = session?.discord?.globalName || session?.discord?.username || session?.ownerUsername;
 
   const handleSectionClick = (s: SectionId) => {
     setActiveSection(s);
@@ -572,38 +593,70 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="min-h-screen text-gray-900" style={{ background: '#f8f8fb', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Top nav */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-        <div className="flex items-center h-14 px-4 gap-4">
-          <button className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100" onClick={() => setSidebarOpen(!sidebarOpen)}>
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-150" style={{ borderBottomColor: '#ebebf0' }}>
+        <div className="flex items-center h-14 px-5 gap-4">
+          <button className="lg:hidden p-1.5 rounded-md text-gray-400 hover:bg-gray-100 transition-colors" onClick={() => setSidebarOpen(!sidebarOpen)}>
             <Menu className="h-4 w-4" />
           </button>
-          <button onClick={() => setLocation('/')} className="flex items-center gap-2 shrink-0">
-            <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
-            <span className="font-bold text-[15px] text-gray-900 tracking-tight">Lumora</span>
+
+          {/* Logo */}
+          <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0">
+            <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain"
+              style={{ filter: 'drop-shadow(0 0 5px rgba(124,58,237,0.3))' }}
+              onError={e => (e.currentTarget.style.display = 'none')} />
+            <span className="font-semibold text-[15px] text-gray-900 tracking-tight">Lumora</span>
           </button>
-          <nav className="hidden lg:flex items-center gap-0.5 ml-2">
-            {[
-              { label: 'Docs', action: () => setLocation('/pricing') },
-              { label: 'Pricing', action: () => { setActiveSection('billing'); } },
-            ].map(({ label, action }) => (
-              <button key={label} onClick={action}
-                className="px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-50">
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="flex-1 max-w-sm mx-auto hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 cursor-text text-[13px] text-gray-400">
-            <Search className="h-3.5 w-3.5 shrink-0" />
-            <span>Search docs…</span>
-          </div>
-          <div className="ml-auto shrink-0">
-            <button onClick={() => setLocation('/login')}
-              className="h-8 px-4 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-all"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
-              Get started
+
+          {/* Nav links */}
+          <nav className="hidden lg:flex items-center gap-0.5 ml-3">
+            <button onClick={() => setLocation('/')}
+              className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100">
+              Home
             </button>
+            <button onClick={() => handleSectionClick('billing')}
+              className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
+              style={{ color: activeSection === 'billing' ? '#6d28d9' : '#6b7280', background: activeSection === 'billing' ? 'rgba(109,40,217,0.07)' : 'transparent' }}
+              onMouseEnter={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = '#111827'; e.currentTarget.style.background = '#f3f4f6'; } }}
+              onMouseLeave={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } }}>
+              Pricing
+            </button>
+            <button onClick={() => handleSectionClick('getting-started')}
+              className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
+              style={{ color: activeSection !== 'billing' ? '#6d28d9' : '#6b7280', background: activeSection !== 'billing' ? 'rgba(109,40,217,0.07)' : 'transparent' }}
+              onMouseEnter={e => { if (activeSection === 'billing') { e.currentTarget.style.color = '#111827'; e.currentTarget.style.background = '#f3f4f6'; } }}
+              onMouseLeave={e => { if (activeSection === 'billing') { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } }}>
+              Docs
+            </button>
+          </nav>
+
+          {/* Right side — avatar or sign-in */}
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            {session ? (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center shrink-0"
+                    style={{ border: '1px solid rgba(109,40,217,0.2)', background: 'rgba(109,40,217,0.1)' }}>
+                    {avatarUrl
+                      ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                      : <span className="text-[11px] font-bold text-violet-700">{(displayName || '?')[0].toUpperCase()}</span>}
+                  </div>
+                  <span className="hidden sm:block text-[13px] text-gray-500">{displayName}</span>
+                </div>
+                <button onClick={() => setLocation('/dashboard')}
+                  className="h-8 px-4 rounded-lg text-[13px] font-medium border transition-all text-gray-700 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
+                  style={{ border: '1px solid #e5e7eb', background: 'transparent' }}>
+                  Dashboard
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setLocation('/login')}
+                className="h-8 px-4 rounded-lg text-[13px] font-medium border transition-all text-gray-700 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
+                style={{ border: '1px solid #e5e7eb', background: 'transparent' }}>
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
