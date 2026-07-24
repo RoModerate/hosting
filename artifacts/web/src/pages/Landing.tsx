@@ -281,20 +281,8 @@ export default function Landing() {
             <span className="font-bold text-[15px] tracking-tight text-white">Lumora</span>
           </button>
 
-          {/* links */}
-          <div className="flex items-center gap-0.5">
-            {[
-              { label: 'Pricing', path: '/pricing' },
-            ].map(({ label, path }) => (
-              <button key={label} onClick={() => setLocation(path)}
-                className="px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors"
-                style={{ color: 'rgba(255,255,255,0.5)' }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'transparent'; }}>
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* links — empty, pricing is in footer */}
+          <div className="flex items-center gap-0.5" />
 
           {/* right side */}
           <div className="ml-auto flex items-center gap-2">
@@ -448,8 +436,8 @@ export default function Landing() {
             { icon: RotateCw, color: '#4ade80', bg: 'rgba(74,222,128,0.1)', border: 'rgba(74,222,128,0.18)', title: 'Always-on restarts',     desc: 'Exponential-backoff auto-restart keeps your bot alive through any crash.' },
             { icon: Bot,      color: '#a78bfa', bg: 'rgba(167,139,250,0.1)',border: 'rgba(167,139,250,0.18)',title: 'AI crash repair',        desc: 'Repeated crashes trigger our AI — it reads the stack trace and patches your code.' },
             { icon: Shield,   color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.18)', title: 'Isolated sandboxes',     desc: 'Every bot runs in its own process. Env vars encrypted at rest.' },
-            { icon: Activity, color: '#f87171', bg: 'rgba(248,113,113,0.1)',border: 'rgba(248,113,113,0.18)',title: 'Live console logs',      desc: 'Stream and filter your bot stdout in the browser. No SSH required.' },
-            { icon: Code2,    color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.18)', title: 'In-browser editor',      desc: 'Full CodeMirror editor — edit, save, and redeploy without leaving the portal.' },
+            { icon: Activity, color: '#f87171', bg: 'rgba(248,113,113,0.1)',border: 'rgba(248,113,113,0.18)',title: 'Live console logs',      desc: 'Stream and filter your bot stdout in the browser in real time.' },
+            { icon: Code2,    color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.18)', title: 'In-browser editor',      desc: 'Browse and edit your bot\'s source files directly in the portal with full syntax highlighting.' },
           ].map(({ icon: Icon, color, bg, border, title, desc }) => (
             <div key={title}
               className="rounded-2xl p-6 transition-all duration-200 cursor-default group"
@@ -467,39 +455,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Steps ─────────────────────────────────────────────────────────── */}
-      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pb-28">
-        <div className="text-center mb-14">
-          <p className="text-[11px] font-bold uppercase tracking-[0.15em] mb-4" style={{ color: 'rgba(167,139,250,0.6)' }}>Getting started</p>
-          <h2 className="font-black tracking-tight" style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.2rem)', letterSpacing: '-0.035em' }}>
-            Live in four steps
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { icon: Upload,    num: '01', title: 'Upload your bot',     desc: 'Drop a ZIP. Node.js or Python detected automatically.' },
-            { icon: Settings2, num: '02', title: 'Add your secrets',    desc: 'Enter your bot token securely in the built-in env manager.' },
-            { icon: Play,      num: '03', title: 'Hit Run',             desc: 'One click to launch. Logs stream live, monitoring begins.' },
-            { icon: RotateCw,  num: '04', title: 'Stay alive forever',  desc: 'Auto-restarts and AI repair run silently in the background.' },
-          ].map(({ icon: Icon, num, title, desc }) => (
-            <div key={num} className="rounded-2xl p-5 relative transition-all duration-200"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = 'rgba(124,58,237,0.35)'; el.style.background = 'rgba(124,58,237,0.06)'; }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor = 'rgba(255,255,255,0.07)'; el.style.background = 'rgba(255,255,255,0.03)'; }}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
-                  <Icon className="h-4 w-4" style={{ color: '#c4b5fd' }} />
-                </div>
-                <span className="font-mono text-[12px] font-bold" style={{ color: 'rgba(124,58,237,0.35)' }}>{num}</span>
-              </div>
-              <h3 className="font-bold text-[14px] mb-2" style={{ color: 'rgba(255,255,255,0.85)' }}>{title}</h3>
-              <p className="text-[12.5px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.28)' }}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── CTA ──────────────────────────────────────────────────────────── */}
       <section className="relative z-10 max-w-2xl mx-auto px-6 pb-32 text-center">
         <div className="relative rounded-3xl px-10 py-14 overflow-hidden"
@@ -510,9 +465,6 @@ export default function Landing() {
             width: '400px', height: '200px',
             background: 'radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.25) 0%, transparent 70%)',
           }} />
-          <p className="text-[11px] font-bold uppercase tracking-[0.15em] mb-5" style={{ color: 'rgba(167,139,250,0.6)' }}>
-            Free forever · No credit card
-          </p>
           <h3 className="font-black tracking-tight mb-4" style={{ fontSize: 'clamp(1.7rem, 4vw, 2.4rem)', letterSpacing: '-0.04em' }}>
             Start hosting today
           </h3>
@@ -538,13 +490,20 @@ export default function Landing() {
             <span className="text-[12.5px]" style={{ color: 'rgba(255,255,255,0.15)' }}>Lumora Hosting</span>
           </div>
           <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.1)' }}>© 2025 Lumora. All rights reserved.</p>
-          <button onClick={() => setLocation('/pricing')}
-            className="text-[12px] transition-colors"
-            style={{ color: 'rgba(255,255,255,0.18)' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.18)')}>
-            Pricing
-          </button>
+          <div className="flex items-center gap-5">
+            {[
+              { label: 'Pricing', path: '/pricing' },
+              { label: 'Dashboard', path: '/dashboard' },
+            ].map(({ label, path }) => (
+              <button key={label} onClick={() => setLocation(path)}
+                className="text-[12px] transition-colors"
+                style={{ color: 'rgba(255,255,255,0.18)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.18)')}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </footer>
     </div>

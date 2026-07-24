@@ -120,11 +120,11 @@ function SidebarSection({
         onClick={() => { setOpen(o => !o); onItemClick(section.id); }}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold transition-colors group"
         style={{
-          color: isActive ? '#6d28d9' : '#6b7280',
-          background: isActive ? 'rgba(109,40,217,0.06)' : 'transparent',
+          color: isActive ? '#a78bfa' : 'rgba(255,255,255,0.4)',
+          background: isActive ? 'rgba(109,40,217,0.14)' : 'transparent',
         }}
-        onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = '#374151'; e.currentTarget.style.background = '#f3f4f6'; } }}
-        onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } }}>
+        onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; } }}
+        onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; } }}>
         <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="flex-1 text-left tracking-wide uppercase text-[10.5px]">{section.label}</span>
         {open
@@ -132,17 +132,17 @@ function SidebarSection({
           : <ChevronRight className="h-3 w-3 opacity-50" />}
       </button>
       {open && (
-        <div className="mt-0.5 ml-2 border-l border-gray-200 pl-3">
+        <div className="mt-0.5 ml-2 pl-3" style={{ borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
           {section.items.map(item => (
             <button key={item} onClick={() => onItemClick(section.id)}
               className="w-full text-left px-2 py-1.5 rounded-md text-[12.5px] transition-colors"
               style={{
-                color: isActive ? '#6d28d9' : '#6b7280',
+                color: isActive ? '#c4b5fd' : 'rgba(255,255,255,0.35)',
                 fontWeight: isActive ? 500 : 400,
                 background: 'transparent',
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#374151'; e.currentTarget.style.background = '#f9fafb'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = isActive ? '#6d28d9' : '#6b7280'; e.currentTarget.style.background = 'transparent'; }}>
+              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = isActive ? '#c4b5fd' : 'rgba(255,255,255,0.35)'; e.currentTarget.style.background = 'transparent'; }}>
               {item}
             </button>
           ))}
@@ -157,19 +157,22 @@ function Sidebar({ activeSection, onSectionClick }: { activeSection: SectionId; 
     <aside className="w-60 shrink-0 flex flex-col gap-0.5 pr-4 pt-6 pb-10">
       <div className="flex items-center gap-2 px-3 mb-4">
         <img src="/lumora-brand.png" alt="Lumora" className="h-5 w-5 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
-        <span className="text-[12px] font-semibold text-gray-400 tracking-wide">Lumora Docs</span>
+        <span className="text-[12px] font-semibold tracking-wide" style={{ color: 'rgba(255,255,255,0.3)' }}>Lumora Docs</span>
       </div>
       {NAV_SECTIONS.map(section => (
         <SidebarSection key={section.id} section={section} activeSection={activeSection} onItemClick={onSectionClick} />
       ))}
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Resources</p>
+      <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.2)' }}>Resources</p>
         {[
           { label: 'Discord Server', href: 'https://discord.gg/4wEKPrgZmD' },
           { label: 'Status Page', href: '#' },
         ].map(({ label, href }) => (
           <a key={label} href={href} target="_blank" rel="noreferrer"
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[12.5px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors">
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[12.5px] transition-colors"
+            style={{ color: 'rgba(255,255,255,0.35)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; e.currentTarget.style.background = 'transparent'; }}>
             {label}
           </a>
         ))}
@@ -188,10 +191,10 @@ function GettingStartedContent({ onNavigate }: { onNavigate: (s: SectionId) => v
           <span className="h-px w-5 bg-violet-300 inline-block" />
           Getting Started
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-4 leading-[1.08]">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-[1.08]" style={{ color: 'rgba(255,255,255,0.92)' }}>
           From zero to live in&nbsp;60&nbsp;seconds.
         </h1>
-        <p className="text-[16px] text-gray-500 leading-relaxed">
+        <p className="text-[16px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
           Follow these steps to upload your first Discord bot and get it running on Lumora.
         </p>
       </div>
@@ -203,27 +206,28 @@ function GettingStartedContent({ onNavigate }: { onNavigate: (s: SectionId) => v
           { icon: Settings, step: '03', title: 'Configure environment variables', desc: 'Navigate to the "Environment" tab in your dashboard. Add your DISCORD_TOKEN and any other secrets your bot needs. Variables are encrypted at rest and injected at runtime — never visible to other users.' },
           { icon: Zap, step: '04', title: 'Start your bot', desc: 'Hit the "Run" button. Lumora installs dependencies, detects your start command, and launches the process. You\'ll see live logs immediately. If your bot crashes, Lumora restarts it automatically.' },
         ].map(({ icon: Icon, step, title, desc }) => (
-          <div key={step} className="flex gap-5 p-6 rounded-2xl bg-white border border-gray-200 hover:shadow-sm transition-all">
+          <div key={step} className="flex gap-5 p-6 rounded-2xl transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div className="flex flex-col items-center gap-2 shrink-0">
               <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
-                <Icon className="h-4.5 w-4.5 text-violet-600" />
+                style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                <Icon className="h-4 w-4" style={{ color: '#c4b5fd' }} />
               </div>
-              <span className="text-[10px] font-mono text-violet-400 font-semibold">{step}</span>
+              <span className="text-[10px] font-mono font-semibold" style={{ color: 'rgba(167,139,250,0.6)' }}>{step}</span>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 text-[14.5px] mb-1.5">{title}</h3>
-              <p className="text-[13px] text-gray-500 leading-relaxed">{desc}</p>
+              <h3 className="font-semibold text-[14.5px] mb-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>{title}</h3>
+              <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.38)' }}>{desc}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="max-w-3xl mx-auto rounded-2xl border border-violet-200 p-8 text-center"
-        style={{ background: 'linear-gradient(145deg, rgba(124,58,237,0.03), rgba(99,102,241,0.02))' }}>
-        <p className="text-[11px] font-semibold text-violet-600 uppercase tracking-widest mb-2">Next</p>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">Explore the Features</h3>
-        <p className="text-[13.5px] text-gray-500 mb-5">Learn about AI crash repair, the file manager, live logs, and more.</p>
+      <div className="max-w-3xl mx-auto rounded-2xl p-8 text-center"
+        style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.22)' }}>
+        <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: '#a78bfa' }}>Next</p>
+        <h3 className="text-xl font-bold mb-2" style={{ color: 'rgba(255,255,255,0.9)' }}>Explore the Features</h3>
+        <p className="text-[13.5px] mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>Learn about AI crash repair, the file manager, live logs, and more.</p>
         <button onClick={() => onNavigate('features')}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold text-white hover:opacity-90 transition-all"
           style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
@@ -269,23 +273,26 @@ function FeaturesContent() {
           <span className="h-px w-5 bg-violet-300 inline-block" />
           Features
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-4 leading-[1.08]">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-[1.08]" style={{ color: 'rgba(255,255,255,0.92)' }}>
           Built for bots that can't afford downtime.
         </h1>
-        <p className="text-[16px] text-gray-500 leading-relaxed">
+        <p className="text-[16px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
           Every Lumora plan includes a full hosting stack — not just a server.
         </p>
       </div>
 
       <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5 mb-16">
         {features.map(({ icon: Icon, title, desc }) => (
-          <div key={title} className="rounded-2xl bg-white border border-gray-200 p-6 hover:shadow-sm transition-all">
+          <div key={title} className="rounded-2xl p-6 transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(124,58,237,0.3)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}>
             <div className="h-9 w-9 rounded-xl flex items-center justify-center mb-4"
-              style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
-              <Icon className="h-4.5 w-4.5 text-violet-600" />
+              style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
+              <Icon className="h-4 w-4" style={{ color: '#c4b5fd' }} />
             </div>
-            <h3 className="font-semibold text-gray-900 text-[14.5px] mb-2">{title}</h3>
-            <p className="text-[13px] text-gray-500 leading-relaxed">{desc}</p>
+            <h3 className="font-semibold text-[14.5px] mb-2" style={{ color: 'rgba(255,255,255,0.85)' }}>{title}</h3>
+            <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.38)' }}>{desc}</p>
           </div>
         ))}
       </div>
@@ -346,29 +353,30 @@ function RuntimesContent() {
           <span className="h-px w-5 bg-violet-300 inline-block" />
           Runtimes
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-4 leading-[1.08]">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-[1.08]" style={{ color: 'rgba(255,255,255,0.92)' }}>
           Host your bot, in any language.
         </h1>
-        <p className="text-[16px] text-gray-500 leading-relaxed">
+        <p className="text-[16px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
           Lumora auto-detects your runtime. Just upload your code — no configuration files required.
         </p>
       </div>
 
       <div className="max-w-3xl mx-auto space-y-5 mb-16">
         {runtimes.map(({ name, badge, color, badgeBg, badgeBorder, desc, details }) => (
-          <div key={name} className="rounded-2xl bg-white border border-gray-200 p-7 hover:shadow-sm transition-all">
+          <div key={name} className="rounded-2xl p-7 transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div className="flex items-center gap-3 mb-4">
-              <h3 className="font-bold text-gray-900 text-[17px]">{name}</h3>
+              <h3 className="font-bold text-[17px]" style={{ color: 'rgba(255,255,255,0.9)' }}>{name}</h3>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
                 style={{ color, background: badgeBg, border: `1px solid ${badgeBorder}` }}>
                 {badge}
               </span>
             </div>
-            <p className="text-[13.5px] text-gray-500 leading-relaxed mb-5">{desc}</p>
+            <p className="text-[13.5px] leading-relaxed mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>{desc}</p>
             <ul className="space-y-2">
               {details.map(d => (
-                <li key={d} className="flex items-start gap-2.5 text-[13px] text-gray-600">
-                  <Check className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
+                <li key={d} className="flex items-start gap-2.5 text-[13px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                  <Check className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: '#a78bfa' }} />
                   {d}
                 </li>
               ))}
@@ -388,10 +396,10 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
           <span className="h-px w-5 bg-violet-300 inline-block" />
           Billing
         </div>
-        <h1 className="text-5xl md:text-6xl font-black text-gray-900 tracking-tight mb-5 leading-[1.05]">
+        <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-5 leading-[1.05]" style={{ color: 'rgba(255,255,255,0.92)' }}>
           Simple, honest pricing.
         </h1>
-        <p className="text-[17px] text-gray-500 leading-relaxed">
+        <p className="text-[17px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
           Start for free. Upgrade when you need always-on hosting. No surprises, no per-seat fees.
         </p>
       </div>
@@ -400,24 +408,25 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16 max-w-4xl mx-auto">
         {PLANS.map(plan => (
           <div key={plan.name}
-            className="relative bg-white rounded-2xl flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            className="relative rounded-2xl flex flex-col transition-all duration-200 hover:-translate-y-0.5"
             style={{
-              border: plan.featured ? '2px solid rgba(124,58,237,0.45)' : '1px solid #e5e7eb',
-              boxShadow: plan.featured ? '0 0 0 1px rgba(124,58,237,0.12), 0 4px 24px rgba(124,58,237,0.1)' : undefined,
+              background: plan.featured ? 'rgba(109,40,217,0.1)' : 'rgba(255,255,255,0.04)',
+              border: plan.featured ? '1.5px solid rgba(124,58,237,0.45)' : '1px solid rgba(255,255,255,0.09)',
+              boxShadow: plan.featured ? '0 0 40px rgba(124,58,237,0.15)' : undefined,
             }}>
             {plan.featured && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-widest text-white"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}>
+                style={{ background: '#7c3aed' }}>
                 MOST POPULAR
               </div>
             )}
 
-            <div className={`p-6 pb-4 border-b ${plan.featured ? 'border-violet-100' : 'border-gray-100'}`}>
-              <h2 className="font-bold text-gray-900 text-[16px] mb-1">{plan.name}</h2>
-              <p className="text-[12.5px] text-gray-500 mb-5 leading-relaxed">{plan.description}</p>
+            <div className="p-6 pb-4" style={{ borderBottom: `1px solid ${plan.featured ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
+              <h2 className="font-bold text-[16px] mb-1" style={{ color: 'rgba(255,255,255,0.9)' }}>{plan.name}</h2>
+              <p className="text-[12.5px] mb-5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.38)' }}>{plan.description}</p>
               <div className="flex items-baseline gap-1">
-                <span className="text-[42px] font-black text-gray-900 leading-none">{plan.price}</span>
-                <span className="text-[13px] text-gray-400">{plan.period}</span>
+                <span className="text-[42px] font-black leading-none" style={{ color: 'rgba(255,255,255,0.95)' }}>{plan.price}</span>
+                <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{plan.period}</span>
               </div>
             </div>
 
@@ -426,13 +435,15 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
                 {plan.features.map(({ text, ok }) => (
                   <li key={text} className="flex items-center gap-3">
                     {ok
-                      ? <div className="h-4 w-4 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                          <Check className="h-2.5 w-2.5 text-violet-600" />
+                      ? <div className="h-4 w-4 rounded-full flex items-center justify-center shrink-0"
+                          style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)' }}>
+                          <Check className="h-2.5 w-2.5" style={{ color: '#c4b5fd' }} />
                         </div>
-                      : <div className="h-4 w-4 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                          <X className="h-2.5 w-2.5 text-gray-300" />
+                      : <div className="h-4 w-4 rounded-full flex items-center justify-center shrink-0"
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <X className="h-2.5 w-2.5" style={{ color: 'rgba(255,255,255,0.2)' }} />
                         </div>}
-                    <span className={`text-[13px] ${ok ? 'text-gray-700' : 'text-gray-400'}`}>{text}</span>
+                    <span className="text-[13px]" style={{ color: ok ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)' }}>{text}</span>
                   </li>
                 ))}
               </ul>
@@ -440,10 +451,10 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
               <button onClick={onLogin}
                 className="w-full py-3 rounded-xl text-[14px] font-semibold transition-all hover:-translate-y-px"
                 style={plan.featured
-                  ? { background: 'linear-gradient(135deg, #7c3aed, #6366f1)', color: '#fff', boxShadow: '0 4px 16px rgba(124,58,237,0.25)' }
-                  : { color: '#374151', border: '1px solid #e5e7eb', background: 'transparent' }}
-                onMouseEnter={e => { if (!plan.featured) { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.borderColor = '#d1d5db'; } }}
-                onMouseLeave={e => { if (!plan.featured) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#e5e7eb'; } }}>
+                  ? { background: '#7c3aed', color: '#fff', border: '1px solid rgba(167,139,250,0.3)', boxShadow: '0 4px 20px rgba(124,58,237,0.35)' }
+                  : { color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', background: 'transparent' }}
+                onMouseEnter={e => { if (!plan.featured) { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; } else { e.currentTarget.style.background = '#6d28d9'; } }}
+                onMouseLeave={e => { if (!plan.featured) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; } else { e.currentTarget.style.background = '#7c3aed'; } }}>
                 Get started
               </button>
             </div>
@@ -458,16 +469,16 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
             <span className="h-px w-5 bg-violet-300 inline-block" />
             Usage Limits
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Know your limits.</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'rgba(255,255,255,0.9)' }}>Know your limits.</h2>
         </div>
-        <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.09)' }}>
           <table className="w-full text-[13.5px]">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left px-6 py-4 text-gray-500 font-semibold">Limit</th>
-                <th className="px-6 py-4 text-gray-700 font-semibold text-center">Free</th>
-                <th className="px-6 py-4 font-semibold text-center" style={{ color: '#7c3aed' }}>Pro</th>
-                <th className="px-6 py-4 text-gray-700 font-semibold text-center">Business</th>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <th className="text-left px-6 py-4 font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>Limit</th>
+                <th className="px-6 py-4 font-semibold text-center" style={{ color: 'rgba(255,255,255,0.6)' }}>Free</th>
+                <th className="px-6 py-4 font-semibold text-center" style={{ color: '#a78bfa' }}>Pro</th>
+                <th className="px-6 py-4 font-semibold text-center" style={{ color: 'rgba(255,255,255,0.6)' }}>Business</th>
               </tr>
             </thead>
             <tbody>
@@ -479,11 +490,11 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
                 ['Runtimes',        'Node, Python', 'All',      'All'],
                 ['Support',         'Community', 'Email',       'Priority'],
               ].map(([label, free, pro, biz], i) => (
-                <tr key={label} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
-                  <td className="px-6 py-3.5 text-gray-600 font-medium">{label}</td>
-                  <td className="px-6 py-3.5 text-gray-500 text-center">{free}</td>
-                  <td className="px-6 py-3.5 text-center font-medium" style={{ color: '#7c3aed' }}>{pro}</td>
-                  <td className="px-6 py-3.5 text-gray-500 text-center">{biz}</td>
+                <tr key={label} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td className="px-6 py-3.5 font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</td>
+                  <td className="px-6 py-3.5 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{free}</td>
+                  <td className="px-6 py-3.5 text-center font-medium" style={{ color: '#a78bfa' }}>{pro}</td>
+                  <td className="px-6 py-3.5 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{biz}</td>
                 </tr>
               ))}
             </tbody>
@@ -498,7 +509,7 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
             <span className="h-px w-5 bg-violet-300 inline-block" />
             Upgrade
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Upgrading your plan.</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'rgba(255,255,255,0.9)' }}>Upgrading your plan.</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
@@ -506,20 +517,20 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
             { icon: TrendingUp, title: 'Instant upgrade', desc: 'Once your new key is redeemed, plan limits update immediately. No restart required — your bot stays online.' },
             { icon: AlertCircle, title: 'Prorated billing', desc: 'Plan changes are prorated. You only pay for what you use. Downgrading takes effect at the next billing cycle.' },
           ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="rounded-xl bg-white border border-gray-200 p-5">
+            <div key={title} className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
-                style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)' }}>
-                <Icon className="h-4 w-4 text-violet-600" />
+                style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                <Icon className="h-4 w-4" style={{ color: '#c4b5fd' }} />
               </div>
-              <h3 className="font-semibold text-gray-900 text-[13.5px] mb-1.5">{title}</h3>
-              <p className="text-[12.5px] text-gray-500 leading-relaxed">{desc}</p>
+              <h3 className="font-semibold text-[13.5px] mb-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>{title}</h3>
+              <p className="text-[12.5px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.38)' }}>{desc}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Divider */}
-      <div className="max-w-4xl mx-auto border-t border-gray-100 mb-14" />
+      <div className="max-w-4xl mx-auto mb-14" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
 
       {/* FAQ */}
       <div className="max-w-4xl mx-auto mb-16">
@@ -528,13 +539,13 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
             <span className="h-px w-5 bg-violet-300 inline-block" />
             FAQ
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Frequently asked questions</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'rgba(255,255,255,0.9)' }}>Frequently asked questions</h2>
         </div>
         <div className="space-y-3">
           {FAQ.map(({ q, a }) => (
-            <div key={q} className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="font-semibold text-gray-900 text-[14px] mb-2">{q}</h3>
-              <p className="text-[13px] text-gray-500 leading-relaxed">{a}</p>
+            <div key={q} className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <h3 className="font-semibold text-[14px] mb-2" style={{ color: 'rgba(255,255,255,0.85)' }}>{q}</h3>
+              <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>{a}</p>
             </div>
           ))}
         </div>
@@ -542,16 +553,19 @@ function BillingContent({ onLogin }: { onLogin: () => void }) {
 
       {/* CTA strip */}
       <div className="max-w-4xl mx-auto">
-        <div className="rounded-2xl border border-violet-200 bg-white p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6"
-          style={{ background: 'linear-gradient(145deg, rgba(124,58,237,0.03) 0%, rgba(99,102,241,0.02) 100%)' }}>
+        <div className="rounded-2xl p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6 relative overflow-hidden"
+          style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)' }}>
+          <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(167,139,250,0.5), transparent)' }} />
           <div className="flex-1">
-            <p className="text-[11px] font-semibold text-violet-600 uppercase tracking-widest mb-1.5">Free forever</p>
-            <h3 className="text-xl font-bold text-gray-900 mb-1.5">Deploy your first bot for free</h3>
-            <p className="text-[13.5px] text-gray-500">No credit card required. One bot, 256 MB RAM, AI crash repair included.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#a78bfa' }}>Free forever</p>
+            <h3 className="text-xl font-bold mb-1.5" style={{ color: 'rgba(255,255,255,0.92)' }}>Deploy your first bot for free</h3>
+            <p className="text-[13.5px]" style={{ color: 'rgba(255,255,255,0.42)' }}>No credit card required. One bot, 256 MB RAM, AI crash repair included.</p>
           </div>
           <button onClick={onLogin}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold text-white shrink-0 hover:opacity-90 transition-all"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '0 2px 12px rgba(124,58,237,0.3)' }}>
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold shrink-0 transition-all hover:-translate-y-px"
+            style={{ background: '#7c3aed', color: '#fff', border: '1px solid rgba(167,139,250,0.25)', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#6d28d9'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#7c3aed'; }}>
             Get started free <ArrowRight className="h-4 w-4" />
           </button>
         </div>
@@ -593,67 +607,74 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen text-gray-900" style={{ background: '#f8f8fb', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="min-h-screen" style={{ background: '#08070f', color: 'rgba(255,255,255,0.85)', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Top nav */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-150" style={{ borderBottomColor: '#ebebf0' }}>
+      <header className="sticky top-0 z-50 border-b" style={{ background: 'rgba(8,7,15,0.96)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottomColor: 'rgba(255,255,255,0.08)' }}>
         <div className="flex items-center h-14 px-5 gap-4">
-          <button className="lg:hidden p-1.5 rounded-md text-gray-400 hover:bg-gray-100 transition-colors" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <button className="lg:hidden p-1.5 rounded-md transition-colors" style={{ color: 'rgba(255,255,255,0.5)' }} onClick={() => setSidebarOpen(!sidebarOpen)}>
             <Menu className="h-4 w-4" />
           </button>
 
           {/* Logo */}
           <button onClick={() => setLocation('/')} className="flex items-center gap-2.5 shrink-0">
             <img src="/lumora-brand.png" alt="Lumora" className="h-6 w-6 object-contain"
-              style={{ filter: 'drop-shadow(0 0 5px rgba(124,58,237,0.3))' }}
+              style={{ filter: 'drop-shadow(0 0 8px rgba(124,58,237,0.5))' }}
               onError={e => (e.currentTarget.style.display = 'none')} />
-            <span className="font-semibold text-[15px] text-gray-900 tracking-tight">Lumora</span>
+            <span className="font-semibold text-[15px] tracking-tight" style={{ color: 'rgba(255,255,255,0.9)' }}>Lumora</span>
           </button>
 
           {/* Nav links */}
           <nav className="hidden lg:flex items-center gap-0.5 ml-3">
             <button onClick={() => setLocation('/')}
-              className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100">
+              className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
+              style={{ color: 'rgba(255,255,255,0.4)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; }}>
               Home
             </button>
             <button onClick={() => handleSectionClick('billing')}
               className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
-              style={{ color: activeSection === 'billing' ? '#6d28d9' : '#6b7280', background: activeSection === 'billing' ? 'rgba(109,40,217,0.07)' : 'transparent' }}
-              onMouseEnter={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = '#111827'; e.currentTarget.style.background = '#f3f4f6'; } }}
-              onMouseLeave={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } }}>
+              style={{ color: activeSection === 'billing' ? '#a78bfa' : 'rgba(255,255,255,0.4)', background: activeSection === 'billing' ? 'rgba(109,40,217,0.15)' : 'transparent' }}
+              onMouseEnter={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; } }}
+              onMouseLeave={e => { if (activeSection !== 'billing') { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; } }}>
               Pricing
             </button>
             <button onClick={() => handleSectionClick('getting-started')}
               className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
-              style={{ color: activeSection !== 'billing' ? '#6d28d9' : '#6b7280', background: activeSection !== 'billing' ? 'rgba(109,40,217,0.07)' : 'transparent' }}
-              onMouseEnter={e => { if (activeSection === 'billing') { e.currentTarget.style.color = '#111827'; e.currentTarget.style.background = '#f3f4f6'; } }}
-              onMouseLeave={e => { if (activeSection === 'billing') { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } }}>
+              style={{ color: activeSection !== 'billing' ? '#a78bfa' : 'rgba(255,255,255,0.4)', background: activeSection !== 'billing' ? 'rgba(109,40,217,0.15)' : 'transparent' }}
+              onMouseEnter={e => { if (activeSection === 'billing') { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; } }}
+              onMouseLeave={e => { if (activeSection === 'billing') { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'transparent'; } }}>
               Docs
             </button>
           </nav>
 
-          {/* Right side — avatar or sign-in */}
+          {/* Right side */}
           <div className="ml-auto flex items-center gap-3 shrink-0">
             {session ? (
               <>
                 <div className="flex items-center gap-2.5">
                   <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center shrink-0"
-                    style={{ border: '1px solid rgba(109,40,217,0.2)', background: 'rgba(109,40,217,0.1)' }}>
+                    style={{ border: '1px solid rgba(167,139,250,0.3)', background: 'rgba(124,58,237,0.25)' }}>
                     {avatarUrl
                       ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                      : <span className="text-[11px] font-bold text-violet-700">{(displayName || '?')[0].toUpperCase()}</span>}
+                      : <span className="text-[11px] font-bold" style={{ color: '#c4b5fd' }}>{(displayName || '?')[0].toUpperCase()}</span>}
                   </div>
-                  <span className="hidden sm:block text-[13px] text-gray-500">{displayName}</span>
+                  <span className="hidden sm:block text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{displayName}</span>
                 </div>
                 <button onClick={() => setLocation('/dashboard')}
-                  className="h-8 px-4 rounded-lg text-[13px] font-medium border transition-all text-gray-700 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
-                  style={{ border: '1px solid #e5e7eb', background: 'transparent' }}>
+                  className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}>
                   Dashboard
                 </button>
               </>
             ) : (
               <button onClick={() => setLocation('/login')}
-                className="h-8 px-4 rounded-lg text-[13px] font-medium border transition-all text-gray-700 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
-                style={{ border: '1px solid #e5e7eb', background: 'transparent' }}>
+                className="h-8 px-4 rounded-lg text-[13px] font-medium transition-all"
+                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.11)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}>
                 Sign in
               </button>
             )}
@@ -665,7 +686,7 @@ export default function Pricing() {
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <div className="relative z-50 w-64 bg-white border-r border-gray-200 h-full overflow-y-auto px-4 pt-4 pb-10">
+          <div className="relative z-50 w-64 h-full overflow-y-auto px-4 pt-4 pb-10" style={{ background: '#0b0a16', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
             <Sidebar activeSection={activeSection} onSectionClick={handleSectionClick} />
           </div>
         </div>
@@ -674,17 +695,17 @@ export default function Pricing() {
       {/* Body */}
       <div className="max-w-[1240px] mx-auto px-4 flex">
         {/* Desktop sidebar */}
-        <div className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-gray-100 shrink-0">
+        <div className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto shrink-0" style={{ borderRight: '1px solid rgba(255,255,255,0.07)' }}>
           <Sidebar activeSection={activeSection} onSectionClick={handleSectionClick} />
         </div>
 
         {/* Main content */}
         <main className="flex-1 min-w-0 px-4 lg:px-12 pt-12 pb-24">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-[12.5px] text-gray-400 mb-8">
-            <button onClick={() => setLocation('/')} className="hover:text-gray-700 transition-colors">Docs</button>
+          <div className="flex items-center gap-1.5 text-[12.5px] mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <button onClick={() => setLocation('/')} className="transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.3)' }}>Docs</button>
             <ChevronRight className="h-3 w-3" />
-            <span className="text-gray-700 font-medium">{breadcrumbLabel[activeSection]}</span>
+            <span className="font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>{breadcrumbLabel[activeSection]}</span>
           </div>
 
           {activeSection === 'getting-started' && <GettingStartedContent onNavigate={handleSectionClick} />}
@@ -693,15 +714,16 @@ export default function Pricing() {
           {activeSection === 'billing' && <BillingContent onLogin={() => setLocation('/login')} />}
 
           {/* Footer */}
-          <div className="max-w-4xl mx-auto mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="max-w-4xl mx-auto mt-16 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="flex items-center gap-2">
-              <img src="/lumora-brand.png" alt="" className="h-5 w-5 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
-              <span className="text-[12.5px] text-gray-400 font-medium">Lumora Hosting</span>
+              <img src="/lumora-brand.png" alt="" className="h-4 w-4 object-contain opacity-20" onError={e => (e.currentTarget.style.display = 'none')} />
+              <span className="text-[12.5px] font-medium" style={{ color: 'rgba(255,255,255,0.2)' }}>Lumora Hosting</span>
             </div>
-            <p className="text-[12px] text-gray-300">© 2025 Lumora. All rights reserved.</p>
+            <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.12)' }}>© 2025 Lumora. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              <button onClick={() => setLocation('/')} className="text-[12px] text-gray-400 hover:text-gray-700 transition-colors">Home</button>
-              <button onClick={() => setLocation('/admin')} className="text-[12px] text-gray-400 hover:text-gray-700 transition-colors">Admin</button>
+              <button onClick={() => setLocation('/')} className="text-[12px] transition-colors" style={{ color: 'rgba(255,255,255,0.2)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}>Home</button>
             </div>
           </div>
         </main>
